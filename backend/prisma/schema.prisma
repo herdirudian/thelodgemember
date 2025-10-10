@@ -1,0 +1,215 @@
+// Prisma schema for The Lodge Family Membership System
+// Database: MySQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Char(36)
+  email     String   @unique
+  password  String
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  member    Member?
+  // Admin management fields
+  fullName  String?
+  isActive  Boolean  @default(true)
+  adminRole AdminRole?
+}
+
+model Member {
+  id                 String   @id @default(uuid()) @db.Char(36)
+  userId             String   @unique
+  fullName           String
+  phone              String
+  registrationDate   DateTime @default(now())
+  isLifetime         Boolean  @default(true)
+  pointsBalance      Int      @default(0)
+  membershipCardUrl  String?
+  qrPayloadHash      String
+  tickets            Ticket[]
+  eventRegistrations EventRegistration[]
+  pointRedemptions   PointRedemption[]
+  pointAdjustments   PointAdjustment[]
+  user               User     @relation(fields: [userId], references: [id])
+}
+
+model RegistrationCode {
+  id        String   @id @default(uuid()) @db.Char(36)
+  code      String   @unique
+  isActive  Boolean  @default(true)
+  expiresAt DateTime?
+  createdBy String
+  createdAt DateTime @default(now())
+}
+
+model Ticket {
+  id            String   @id @default(uuid()) @db.Char(36)
+  memberId      String
+  name          String
+  validDate     DateTime
+  status        TicketStatus @default(ACTIVE)
+  qrPayloadHash String
+  createdAt     DateTime @default(now())
+  redeemedAt    DateTime?
+  member        Member   @relation(fields: [memberId], references: [id])
+}
+
+model Event {
+  id            String   @id @default(uuid()) @db.Char(36)
+  title         String
+  description   String
+  eventDate     DateTime
+  quota         Int
+  imageUrl      String?
+  createdAt     DateTime @default(now())
+  registrations EventRegistration[]
+}
+
+model EventRegistration {
+  id            String   @id @default(uuid()) @db.Char(36)
+  eventId       String
+  memberId      String
+  status        RegistrationStatus @default(REGISTERED)
+  qrPayloadHash String
+  createdAt     DateTime @default(now())
+  redeemedAt    DateTime?
+  event         Event    @relation(fields: [eventId], references: [id])
+  member        Member   @relation(fields: [memberId], references: [id])
+}
+
+model PointRedemption {
+  id            String   @id @default(uuid()) @db.Char(36)
+  memberId      String
+  pointsUsed    Int
+  rewardName    String
+  status        RedemptionStatus @default(ACTIVE)
+  qrPayloadHash String
+  createdAt     DateTime @default(now())
+  redeemedAt    DateTime?
+  promoId       String?
+  promo         Promo?   @relation(fields: [promoId], references: [id])
+  member        Member   @relation(fields: [memberId], references: [id])
+}
+
+model PointAdjustment {
+  id              String          @id @default(uuid()) @db.Char(36)
+  memberId        String
+  adminId         String
+  adminName       String
+  type            AdjustmentType
+  points          Int
+  reason          String?
+  previousBalance Int?
+  newBalance      Int?
+  createdAt       DateTime        @default(now())
+  member          Member          @relation(fields: [memberId], references: [id])
+}
+
+model Announcement {
+  id          String   @id @default(uuid()) @db.Char(36)
+  title       String
+  description String
+  imageUrl    String?
+  postedAt    DateTime @default(now())
+  createdBy   String
+}
+
+model Promo {
+  id             String    @id @default(uuid()) @db.Char(36)
+  title          String
+  description    String
+  startDate      DateTime
+  endDate        DateTime
+  imageUrl       String?
+  type           PromoType @default(INFORMATION)
+  pointsRequired Int?
+  maxRedeem      Int?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  // add back relation from PointRedemption
+  pointRedemptions PointRedemption[]
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+// New enum for granular admin roles
+enum AdminRole {
+  CASHIER
+  MODERATOR
+  OWNER
+  SUPER_ADMIN
+}
+
+enum TicketStatus {
+  ACTIVE
+  REDEEMED
+}
+
+enum RegistrationStatus {
+  REGISTERED
+  REDEEMED
+}
+
+enum RedemptionStatus {
+  ACTIVE
+  REDEEMED
+}
+
+enum AdjustmentType {
+  ADD
+  SUBTRACT
+}
+
+model RedeemHistory {
+  id           String      @id @default(uuid()) @db.Char(36)
+  memberId     String
+  memberName   String
+  voucherType  VoucherType
+  voucherId    String
+  voucherLabel String?
+  redeemedAt   DateTime    @default(now())
+  adminId      String
+  adminName    String
+  proofUrl     String?
+  createdAt    DateTime    @default(now())
+}
+
+enum VoucherType {
+  TICKET
+  POINTS
+  EVENT
+}
+
+enum PromoType {
+  INFORMATION
+  REDEEM_POINTS
+  EXCLUSIVE_MEMBER
+  FREE_BENEFIT_NEW_REG
+  EVENT
+}
+
+model AdminActivity {
+  id          String     @id @default(uuid()) @db.Char(36)
+  adminId     String
+  adminName   String?
+  adminRole   AdminRole?
+  method      String
+  path        String
+  status      Int
+  ip          String?
+  userAgent   String?
+  requestBody String?
+  query       String?
+  createdAt   DateTime   @default(now())
+}
