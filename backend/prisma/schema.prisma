@@ -71,6 +71,7 @@ model Event {
   imageUrl      String?
   createdAt     DateTime @default(now())
   registrations EventRegistration[]
+  promos        Promo[]
 }
 
 model EventRegistration {
@@ -132,10 +133,24 @@ model Promo {
   type           PromoType @default(INFORMATION)
   pointsRequired Int?
   maxRedeem      Int?
+  quota          Int?
+  // Optional link to Event for promos of type EVENT or EXCLUSIVE_MEMBER
+  eventId        String?
+  event          Event?    @relation(fields: [eventId], references: [id])
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+  // Controls for showing buttons on member UI
+  showMoreButton Boolean   @default(true)
+  showJoinButton Boolean   @default(true)
   // add back relation from PointRedemption
   pointRedemptions PointRedemption[]
+}
+model SliderImage {
+  id        String   @id @default(uuid()) @db.Char(36)
+  imageUrl  String
+  title     String?
+  createdAt DateTime @default(now())
+  createdBy String?
 }
 
 enum Role {

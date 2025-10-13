@@ -4,3 +4,8 @@ node_modules
 
 dist
 /generated/prisma
+
+# ignore large assets/uploads
+uploads/
+cards/
+uploads/redeem-proofs/

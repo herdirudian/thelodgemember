@@ -6,6 +6,8 @@ import dayjs from 'dayjs';
 import { signPayload } from '../utils/security';
 import { generateQRDataURL } from '../utils/qr';
 import { v4 as uuidv4 } from 'uuid';
+import { createMembershipCardPDF } from '../utils/pdf';
+import path from 'path';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -26,6 +28,34 @@ function authMiddleware(req: any, res: any, next: any) {
 router.get('/me', authMiddleware, async (req: any, res) => {
   const userId = req.user.uid as string;
   const user = await prisma.user.findUnique({ where: { id: userId }, include: { member: true } });
+
+  // Auto-provision member profile if missing for a logged-in MEMBER
+  if (user && !user.member && user.role === 'MEMBER') {
+    const fullName = (user.fullName && user.fullName.trim().length > 0) ? user.fullName : (user.email?.split('@')[0] || 'Member');
+    const phone = '0000000000';
+    const payload = { type: 'member', memberId: user.id };
+    const { data, hash } = signPayload(payload);
+    const qrUrl = `${config.appUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}`;
+    const qrDataURL = await generateQRDataURL(qrUrl);
+    const created = await prisma.member.create({ data: {
+      userId: user.id,
+      fullName,
+      phone,
+      qrPayloadHash: hash,
+    }});
+    // Generate membership card PDF
+    const cardsDir = path.join(process.cwd(), 'cards');
+    const pdfPath = path.join(cardsDir, `${created.id}.pdf`);
+    try { require('fs').mkdirSync(cardsDir, { recursive: true }); } catch {}
+    createMembershipCardPDF({ fullName, email: user.email, phone, memberId: created.id, qrDataUrl: qrDataURL, outputPath: pdfPath, logoPath: path.join(process.cwd(), '..', 'frontend', 'public', 'The Lodge Maribaya Logo.svg') });
+    await prisma.member.update({ where: { id: created.id }, data: { membershipCardUrl: `${config.appUrl}/files/cards/${created.id}.pdf` } });
+    // Refresh user with member relation
+    const refreshed = await prisma.user.findUnique({ where: { id: userId }, include: { member: true } });
+    if (refreshed) {
+      (user as any).member = refreshed.member;
+    }
+  }
+
   const member = user?.member ? {
     ...user.member,
     membershipCardUrl: (() => {
@@ -113,11 +143,10 @@ router.get('/events', authMiddleware, async (req: any, res) => {
   try {
     const userId = req.user.uid as string;
     const member = await prisma.member.findUnique({ where: { userId } });
-    if (!member) return res.status(404).json({ message: 'Member not found' });
     const events = await prisma.event.findMany({ orderBy: { eventDate: 'asc' } });
     const enriched = await Promise.all(events.map(async (ev) => {
       const registeredCount = await prisma.eventRegistration.count({ where: { eventId: ev.id } });
-      const myReg = await prisma.eventRegistration.findFirst({ where: { eventId: ev.id, memberId: member.id } });
+      const myReg = member ? await prisma.eventRegistration.findFirst({ where: { eventId: ev.id, memberId: member.id } }) : null;
       return { ...ev, seatsLeft: Math.max(ev.quota - registeredCount, 0), myRegistration: myReg };
     }));
     res.json({ events: enriched });
@@ -279,6 +308,48 @@ router.get('/promos', async (req, res) => {
     res.json(enriched);
   } catch (e: any) {
     console.error('Member promos error:', e);
+    res.status(500).json({ message: e?.message || 'Server error' });
+  }
+});
+
+router.get('/slider-images', async (req, res) => {
+  try {
+    // Ambil data slider terbaru
+    let list: any[] = [];
+    try {
+      list = await (prisma as any).sliderImage.findMany({ orderBy: { createdAt: 'desc' } });
+    } catch (e1) {
+      try {
+        await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS SliderImage (
+          id CHAR(36) NOT NULL,
+          imageUrl VARCHAR(255) NOT NULL,
+          title VARCHAR(191) NULL,
+          createdAt DATETIME(3) NOT NULL,
+          createdBy VARCHAR(191) NULL,
+          PRIMARY KEY (id)
+        )`);
+      } catch {}
+      list = await prisma.$queryRawUnsafe(`SELECT id, imageUrl, title, createdAt, createdBy FROM SliderImage ORDER BY createdAt DESC`);
+    }
+
+    const targetBase = `${req.protocol}://${req.get('host')}`;
+    const enriched = list.map((p: any) => {
+      let fixedImageUrl = p.imageUrl as string | undefined;
+      try {
+        if (fixedImageUrl && fixedImageUrl.includes('/files/uploads/')) {
+          const u = new URL(fixedImageUrl);
+          const currentBase = `${u.protocol}//${u.host}`;
+          if (currentBase !== targetBase) {
+            fixedImageUrl = fixedImageUrl.replace(currentBase, targetBase);
+          }
+        }
+      } catch {}
+      return { ...p, imageUrl: fixedImageUrl };
+    });
+
+    res.json(enriched);
+  } catch (e: any) {
+    console.error('Member slider images error:', e);
     res.status(500).json({ message: e?.message || 'Server error' });
   }
 });

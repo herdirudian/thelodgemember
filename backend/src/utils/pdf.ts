@@ -1,6 +1,8 @@
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
+// @ts-ignore - no types for svg-to-pdfkit
+const SVGtoPDF = require('svg-to-pdfkit');
 
 export function createMembershipCardPDF(options: {
   fullName: string;
@@ -9,29 +11,85 @@ export function createMembershipCardPDF(options: {
   memberId: string;
   qrDataUrl: string;
   outputPath: string;
+  logoPath?: string;
 }) {
-  const doc = new PDFDocument({ size: [400, 250], margin: 20 });
+  const width = 400;
+  const height = 250;
+  const doc = new PDFDocument({ size: [width, height], margin: 0 });
   const stream = fs.createWriteStream(options.outputPath);
   doc.pipe(stream);
 
-  doc.rect(0, 0, 400, 250).fill('#ffffff');
-  doc.fillColor('#0F4D39');
-  doc.roundedRect(10, 10, 380, 230, 12).stroke('#0F4D39');
+  // Background
+  doc.rect(0, 0, width, height).fill('#f7f9f8');
 
-  doc.fontSize(18).fillColor('#0F4D39').text('The Lodge Family', 20, 20);
-  doc.fontSize(10).fillColor('#333333').text('Membership Card', 20, 40);
+  // Card container with rounded border
+  doc.roundedRect(10, 10, width - 20, height - 20, 14).fill('#ffffff');
+  doc.roundedRect(10, 10, width - 20, height - 20, 14).stroke('#e2e8e6');
 
-  doc.fontSize(12).fillColor('#0F4D39').text(options.fullName, 20, 70);
-  doc.fontSize(10).fillColor('#333333').text(`${options.email} | ${options.phone}`, 20, 90);
-  doc.fontSize(10).fillColor('#333333').text(`Member ID: ${options.memberId}`, 20, 110);
+  // Brand header bar
+  doc.save();
+  doc.roundedRect(10, 10, width - 20, 62, 14).fill('#0F4D39');
+  // Logo area (support PNG/JPG, and SVG via svg-to-pdfkit)
+  if (options.logoPath && fs.existsSync(options.logoPath)) {
+    const lower = options.logoPath.toLowerCase();
+    if (lower.endsWith('.svg')) {
+      try {
+        const svgContent = fs.readFileSync(options.logoPath, 'utf8');
+        SVGtoPDF(doc, svgContent, 20, 16, { width: 44, height: 28 });
+      } catch {}
+    } else {
+      try { doc.image(options.logoPath, 20, 20, { width: 40, height: 24 }); } catch {}
+    }
+  } else {
+    // Fallback simple logo mark (stylized leaf + stem)
+    doc.fillColor('#ffffff');
+    doc.save();
+    doc.translate(28, 28);
+    doc.scale(1.0);
+    doc.moveTo(0, 12).bezierCurveTo(20, -12, 40, 12, 0, 40).fill('#86d2b7');
+    doc.restore();
+    doc.roundedRect(42, 28, 4, 28, 2).fill('#c7f1e0');
+  }
+  // Brand text
+  doc.fillColor('#ffffff').fontSize(18).text('The Lodge', 70, 22, { width: width - 90, align: 'left' });
+  doc.fillColor('#e6f2ef').fontSize(11).text('Family Membership', 70, 42, { width: width - 90, align: 'left' });
+  doc.restore();
 
+  // Member main info
+  const contentLeftX = 24;
+  const contentTopY = 86;
+  doc.fillColor('#0F4D39').fontSize(14).text(options.fullName, contentLeftX, contentTopY, { width: 220 });
+  doc.fillColor('#4b5563').fontSize(10).text(`${options.email}  •  ${options.phone}`, contentLeftX, contentTopY + 20, { width: 220 });
+
+  // Member ID badge
+  doc.save();
+  doc.roundedRect(contentLeftX, contentTopY + 44, 200, 36, 8).fill('#e8f3f0');
+  doc.fillColor('#0F4D39').fontSize(10).text('Member ID', contentLeftX + 10, contentTopY + 50);
+  doc.fontSize(12).text(options.memberId, contentLeftX + 10, contentTopY + 64);
+  doc.restore();
+
+  // QR box on the right
+  const qrBoxX = width - 146;
+  const qrBoxY = 86;
+  const qrBoxW = 120;
+  const qrBoxH = 120;
+  doc.save();
+  doc.roundedRect(qrBoxX, qrBoxY, qrBoxW, qrBoxH, 12).fill('#ffffff');
+  doc.roundedRect(qrBoxX, qrBoxY, qrBoxW, qrBoxH, 12).stroke('#0F4D39');
+
+  // Prepare QR image from data URL (temporary file to ensure pdfkit compatibility)
   const qrBase64 = options.qrDataUrl.split(',')[1];
   const qrBuffer = Buffer.from(qrBase64, 'base64');
-  const qrPath = path.join(path.dirname(options.outputPath), `qr-${options.memberId}.png`);
-  fs.writeFileSync(qrPath, qrBuffer);
-  doc.image(qrPath, 280, 60, { width: 100, height: 100 });
+  const tempDir = path.dirname(options.outputPath);
+  const qrPath = path.join(tempDir, `qr-${options.memberId}.png`);
+  try { fs.writeFileSync(qrPath, qrBuffer); } catch {}
+  try { doc.image(qrPath, qrBoxX + 10, qrBoxY + 10, { width: qrBoxW - 20, height: qrBoxW - 20 }); } catch {}
 
-  doc.fontSize(9).fillColor('#0F4D39').text('Scan QR for validation', 280, 165, { width: 100, align: 'center' });
+  doc.fillColor('#0F4D39').fontSize(9).text('Scan QR untuk verifikasi', qrBoxX, qrBoxY + qrBoxH - 22, { width: qrBoxW, align: 'center' });
+  doc.restore();
+
+  // Footer tagline
+  doc.fillColor('#6b7280').fontSize(9).text('Experience nature & adventure at The Lodge', 20, height - 28, { width: width - 40, align: 'center' });
 
   doc.end();
   stream.on('finish', () => {
@@ -59,7 +117,15 @@ export function createRedeemProofPDF(options: {
   // Header
   doc.rect(0, 0, doc.page.width, 80).fill('#ffffff');
   if (options.logoPath && fs.existsSync(options.logoPath)) {
-    try { doc.image(options.logoPath, 50, 20, { width: 100 }); } catch {}
+    try {
+      const lower = options.logoPath.toLowerCase();
+      if (lower.endsWith('.svg')) {
+        const svg = fs.readFileSync(options.logoPath, 'utf8');
+        SVGtoPDF(doc, svg, 50, 20, { width: 100, height: 50 });
+      } else {
+        doc.image(options.logoPath, 50, 20, { width: 100 });
+      }
+    } catch {}
   }
   doc.fontSize(20).fillColor('#0F4D39').text(company, 170, 25);
   doc.fontSize(12).fillColor('#333333').text('Bukti Redeem Voucher', 170, 50);
@@ -75,17 +141,9 @@ export function createRedeemProofPDF(options: {
   // QR code (hasil digunakan)
   const qrBase64 = options.qrDataUrl.split(',')[1];
   const qrBuffer = Buffer.from(qrBase64, 'base64');
-  const qrPath = path.join(path.dirname(options.outputPath), `qr-proof-${Date.now()}.png`);
-  fs.writeFileSync(qrPath, qrBuffer);
-  doc.moveDown(1);
-  doc.fontSize(11).fillColor('#0F4D39').text('QR Voucher (terpakai):');
-  doc.image(qrPath, 50, doc.y + 10, { width: 140, height: 140 });
-  doc.moveDown(8);
-  doc.fontSize(9).fillColor('#0F4D39').text('Scan QR bila diperlukan untuk validasi tambahan');
-
-  // Footer
-  doc.moveDown(2);
-  doc.fontSize(10).fillColor('#999999').text('Dokumen ini dihasilkan otomatis oleh sistem The Lodge Family.');
+  const qrPath = path.join(path.dirname(options.outputPath), `qr-proof.png`);
+  try { fs.writeFileSync(qrPath, qrBuffer); } catch {}
+  try { doc.image(qrPath, doc.page.width - 170, 120, { width: 120, height: 120 }); } catch {}
 
   doc.end();
   stream.on('finish', () => {

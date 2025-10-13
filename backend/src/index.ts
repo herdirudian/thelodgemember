@@ -21,7 +21,7 @@ dotenv.config({ override: true });
 const app = express();
 app.use(express.json());
 // Strengthen CORS: allow localhost variants, explicit methods and headers
-const allowedOrigins = [config.frontendUrl, 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001'];
+const allowedOrigins = [config.frontendUrl, 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001', 'http://localhost:3003', 'http://127.0.0.1:3003'];
 app.use(cors({
   origin: (origin, callback) => {
     // In development, reflect the request origin to allow dev hosts and IPs
@@ -53,6 +53,10 @@ app.use('/api/admin', adminRouter);
 // Health
 app.get('/', (_req, res) => {
   res.send({ status: 'ok', name: 'The Lodge Family Membership API' });
+});
+// Tambahkan rute health untuk prefix /api agar ping di frontend mengembalikan JSON
+app.get('/api', (_req, res) => {
+  res.json({ status: 'ok', name: 'The Lodge Family Membership API', path: '/api' });
 });
 
 // Static files for generated membership cards
@@ -89,6 +93,31 @@ async function seedInitialData() {
       console.log('Seeded default announcement');
     }
 
+    // Seed minimal sample events for local dev if none exists
+    const evCount = await prisma.event.count();
+    if (evCount === 0) {
+      const now = Date.now();
+      await prisma.event.create({
+        data: {
+          title: 'Exclusive Gathering',
+          description: 'Meet & greet with members and enjoy exclusive benefits.',
+          eventDate: new Date(now + 7 * 24 * 60 * 60 * 1000),
+          quota: 100,
+          imageUrl: undefined,
+        },
+      });
+      await prisma.event.create({
+        data: {
+          title: 'Member Workshop',
+          description: 'Hands-on workshop for members with limited seats.',
+          eventDate: new Date(now + 14 * 24 * 60 * 60 * 1000),
+          quota: 50,
+          imageUrl: undefined,
+        },
+      });
+      console.log('Seeded sample events: Exclusive Gathering, Member Workshop');
+    }
+
     // Seed ADMIN account if provided via environment variables
     const adminEmail = process.env.ADMIN_EMAIL;
     const adminPassword = process.env.ADMIN_PASSWORD;
@@ -116,7 +145,8 @@ async function seedInitialData() {
         const cardsDir = path.join(process.cwd(), 'cards');
         const pdfPath = path.join(cardsDir, `${adminMember.id}.pdf`);
         try { fs.mkdirSync(cardsDir, { recursive: true }); } catch {}
-        createMembershipCardPDF({ fullName, email: adminEmail, phone, memberId: adminMember.id, qrDataUrl: qrDataURL, outputPath: pdfPath });
+-        createMembershipCardPDF({ fullName, email: adminEmail, phone, memberId: adminMember.id, qrDataUrl: qrDataURL, outputPath: pdfPath, logoPath: path.join(process.cwd(), 'assets', 'lodge-logo.png') });
++        createMembershipCardPDF({ fullName, email: adminEmail, phone, memberId: adminMember.id, qrDataUrl: qrDataURL, outputPath: pdfPath, logoPath: path.join(process.cwd(), '..', 'frontend', 'public', 'The Lodge Maribaya Logo.svg') });
         await prisma.member.update({ where: { id: adminMember.id }, data: { membershipCardUrl: `${config.appUrl}/files/cards/${adminMember.id}.pdf` } });
 
         console.log(`Seeded admin user: ${adminEmail}`);

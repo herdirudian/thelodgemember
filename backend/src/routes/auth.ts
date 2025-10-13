@@ -44,7 +44,7 @@ router.post('/register', async (req, res) => {
     const cardsDir = path.join(process.cwd(), 'cards');
     const pdfPath = path.join(cardsDir, `${member.id}.pdf`);
     try { require('fs').mkdirSync(cardsDir, { recursive: true }); } catch {}
-    createMembershipCardPDF({ fullName, email, phone, memberId: member.id, qrDataUrl: qrDataURL, outputPath: pdfPath });
+    createMembershipCardPDF({ fullName, email, phone, memberId: member.id, qrDataUrl: qrDataURL, outputPath: pdfPath, logoPath: path.join(process.cwd(), '..', 'frontend', 'public', 'The Lodge Maribaya Logo.svg') });
 
     await prisma.member.update({ where: { id: member.id }, data: { membershipCardUrl: `${config.appUrl}/files/cards/${member.id}.pdf` } });
 
