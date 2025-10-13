@@ -228,3 +228,33 @@ model AdminActivity {
   query       String?
   createdAt   DateTime   @default(now())
 }
+
+model Settings {
+  id                String   @id @default(uuid()) @db.Char(36)
+  // General
+  appName           String   @default("The Lodge Family")
+  defaultLocale     String   @default("id-ID")
+  timeZone          String   @default("Asia/Jakarta")
+  // Branding
+  primaryColor      String   @default("#0F4D39")
+  darkMode          Boolean  @default(true)
+  logoUrl           String?
+  // Security
+  require2FA        Boolean  @default(false)
+  sessionTimeout    Int      @default(60)
+  allowDirectLogin  Boolean  @default(true)
+  // Email
+  fromName          String?
+  fromEmail         String?
+  emailProvider     String   @default("smtp")
+  // Integrations
+  cloudinaryEnabled Boolean  @default(false)
+  cloudinaryFolder  String?
+  webhookUrl        String?
+  // Maintenance
+  maintenanceMode   Boolean  @default(false)
+  announcement      String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}

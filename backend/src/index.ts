@@ -152,6 +152,68 @@ async function seedInitialData() {
         console.log(`Seeded admin user: ${adminEmail}`);
       }
     }
+    // Seed default Settings if not exist
+    const existingSettings = await (prisma as any).settings.findFirst({ orderBy: { updatedAt: 'desc' } }).catch(() => null);
+    if (!existingSettings) {
+      try {
+        await (prisma as any).settings.create({ data: {
+          appName: 'The Lodge Family',
+          defaultLocale: 'id-ID',
+          timeZone: 'Asia/Jakarta',
+          primaryColor: '#0F4D39',
+          darkMode: true,
+          logoUrl: null,
+          require2FA: false,
+          sessionTimeout: 60,
+          allowDirectLogin: true,
+          fromName: null,
+          fromEmail: null,
+          emailProvider: 'smtp',
+          cloudinaryEnabled: false,
+          cloudinaryFolder: null,
+          webhookUrl: null,
+          maintenanceMode: false,
+          announcement: null,
+        } });
+        console.log('Seeded default Settings via Prisma');
+      } catch {
+        // Fallback raw SQL for MySQL if Prisma model ungenerated
+        try {
+          await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS Settings (
+            id CHAR(36) NOT NULL,
+            appName VARCHAR(191) NOT NULL DEFAULT 'The Lodge Family',
+            defaultLocale VARCHAR(32) NOT NULL DEFAULT 'id-ID',
+            timeZone VARCHAR(64) NOT NULL DEFAULT 'Asia/Jakarta',
+            primaryColor VARCHAR(16) NOT NULL DEFAULT '#0F4D39',
+            darkMode BOOLEAN NOT NULL DEFAULT true,
+            logoUrl VARCHAR(255) NULL,
+            require2FA BOOLEAN NOT NULL DEFAULT false,
+            sessionTimeout INT NOT NULL DEFAULT 60,
+            allowDirectLogin BOOLEAN NOT NULL DEFAULT true,
+            fromName VARCHAR(191) NULL,
+            fromEmail VARCHAR(191) NULL,
+            emailProvider VARCHAR(64) NOT NULL DEFAULT 'smtp',
+            cloudinaryEnabled BOOLEAN NOT NULL DEFAULT false,
+            cloudinaryFolder VARCHAR(191) NULL,
+            webhookUrl VARCHAR(255) NULL,
+            maintenanceMode BOOLEAN NOT NULL DEFAULT false,
+            announcement TEXT NULL,
+            createdAt DATETIME(3) NOT NULL,
+            updatedAt DATETIME(3) NOT NULL,
+            PRIMARY KEY (id)
+          )`);
+          const rows: any = await prisma.$queryRawUnsafe(`SELECT * FROM Settings ORDER BY updatedAt DESC LIMIT 1`);
+          if (!Array.isArray(rows) || rows.length === 0) {
+            const now = new Date();
+            const id = crypto.randomUUID ? crypto.randomUUID() : require('uuid').v4();
+            await prisma.$executeRaw`INSERT INTO Settings (id, appName, defaultLocale, timeZone, primaryColor, darkMode, logoUrl, require2FA, sessionTimeout, allowDirectLogin, fromName, fromEmail, emailProvider, cloudinaryEnabled, cloudinaryFolder, webhookUrl, maintenanceMode, announcement, createdAt, updatedAt) VALUES (${id}, 'The Lodge Family', 'id-ID', 'Asia/Jakarta', '#0F4D39', true, ${null}, false, 60, true, ${null}, ${null}, 'smtp', false, ${null}, ${null}, false, ${null}, ${now}, ${now})`;
+            console.log('Seeded default Settings via raw SQL');
+          }
+        } catch (err) {
+          console.error('Failed to seed default Settings', err);
+        }
+      }
+    }
   } catch (e) {
     console.error('Seed error', e);
   }

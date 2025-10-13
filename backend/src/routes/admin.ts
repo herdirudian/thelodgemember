@@ -13,9 +13,19 @@ import { VoucherType } from '@prisma/client'
 import { generateQRDataURL } from '../utils/qr'
 import { createRedeemProofPDF } from '../utils/pdf'
 import bcrypt from 'bcryptjs'
+import { z } from 'zod'
 
 const prisma = new PrismaClient();
 const router = Router();
+
+// In-memory cache for Settings with TTL
+const SETTINGS_CACHE_TTL_MS = 60_000; // 60 seconds
+let settingsCache: { value: any | null; expireAt: number; setAt: number } = { value: null, expireAt: 0, setAt: 0 };
+
+// Helper: deep clone to avoid mutation affecting cached reference
+function safeClone<T>(obj: T): T {
+  return obj == null ? (obj as any) : JSON.parse(JSON.stringify(obj));
+}
 
 function pathIncludes(pathname: string, keyword: string) {
   try { return pathname.includes(keyword); } catch { return false; }
@@ -1177,6 +1187,250 @@ router.get('/redeem-history', adminAuth, async (req, res) => {
   } catch (e: any) {
     console.error('List redeem history error:', e);
     res.status(500).json({ message: e?.message || 'Server error' });
+  }
+});
+
+// Settings endpoints (OWNER / SUPER_ADMIN only)
+
+export const settingsPatchSchema = z.object({
+  appName: z.string().min(1).max(191).optional(),
+  defaultLocale: z.string().min(2).max(32).optional(),
+  timeZone: z.string().min(1).max(64).optional(),
+  primaryColor: z.string().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'primaryColor harus format hex seperti #RRGGBB').optional(),
+  darkMode: z.boolean().optional(),
+  logoUrl: z.string().url().max(255).nullable().optional(),
+  require2FA: z.boolean().optional(),
+  sessionTimeout: z.number().int().min(5).max(24 * 60).optional(),
+  allowDirectLogin: z.boolean().optional(),
+  fromName: z.string().max(191).nullable().optional(),
+  fromEmail: z.string().email().max(191).nullable().optional(),
+  emailProvider: z.enum(['smtp']).optional(),
+  cloudinaryEnabled: z.boolean().optional(),
+  cloudinaryFolder: z.string().max(191).nullable().optional(),
+  webhookUrl: z.string().url().max(255).nullable().optional(),
+  maintenanceMode: z.boolean().optional(),
+  announcement: z.string().max(5000).nullable().optional(),
+}).strict();
+
+router.get('/settings', adminAuth, async (req, res) => {
+  const role = String(req.user?.adminRole || '').toUpperCase();
+  if (role !== 'OWNER' && role !== 'SUPER_ADMIN') {
+    return res.status(403).json({ message: 'Access denied: settings require OWNER or SUPER_ADMIN' });
+  }
+  try {
+    // Cache hit
+    const nowTs = Date.now();
+    if (settingsCache.value) {
+      if (nowTs < settingsCache.setAt) {
+        settingsCache = { value: null, expireAt: 0, setAt: 0 };
+      } else if (settingsCache.expireAt > nowTs) {
+        return res.json(safeClone(settingsCache.value));
+      }
+    }
+    // Try Prisma Client first
+    try {
+      const rec = await (prisma as any).settings.findFirst({ orderBy: { updatedAt: 'desc' } });
+      if (rec) { const clone = safeClone(rec); const now = Date.now(); settingsCache = { value: clone, expireAt: now + SETTINGS_CACHE_TTL_MS, setAt: now }; return res.json(clone); }
+    } catch (e1) {
+      // Fallback: ensure table exists and fetch first row
+      try {
+        await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS Settings (
+          id CHAR(36) NOT NULL,
+          appName VARCHAR(191) NOT NULL DEFAULT 'The Lodge Family',
+          defaultLocale VARCHAR(32) NOT NULL DEFAULT 'id-ID',
+          timeZone VARCHAR(64) NOT NULL DEFAULT 'Asia/Jakarta',
+          primaryColor VARCHAR(16) NOT NULL DEFAULT '#0F4D39',
+          darkMode BOOLEAN NOT NULL DEFAULT true,
+          logoUrl VARCHAR(255) NULL,
+          require2FA BOOLEAN NOT NULL DEFAULT false,
+          sessionTimeout INT NOT NULL DEFAULT 60,
+          allowDirectLogin BOOLEAN NOT NULL DEFAULT true,
+          fromName VARCHAR(191) NULL,
+          fromEmail VARCHAR(191) NULL,
+          emailProvider VARCHAR(64) NOT NULL DEFAULT 'smtp',
+          cloudinaryEnabled BOOLEAN NOT NULL DEFAULT false,
+          cloudinaryFolder VARCHAR(191) NULL,
+          webhookUrl VARCHAR(255) NULL,
+          maintenanceMode BOOLEAN NOT NULL DEFAULT false,
+          announcement TEXT NULL,
+          createdAt DATETIME(3) NOT NULL,
+          updatedAt DATETIME(3) NOT NULL,
+          PRIMARY KEY (id)
+        )`);
+      } catch {}
+      const rows: any = await prisma.$queryRawUnsafe(`SELECT * FROM Settings ORDER BY updatedAt DESC LIMIT 1`);
+      if (Array.isArray(rows) && rows.length) { const clone = safeClone(rows[0]); const now = Date.now(); settingsCache = { value: clone, expireAt: now + SETTINGS_CACHE_TTL_MS, setAt: now }; return res.json(clone); }
+    }
+    // If nothing found, return sane defaults
+    const defaults = {
+      appName: 'The Lodge Family',
+      defaultLocale: 'id-ID',
+      timeZone: 'Asia/Jakarta',
+      primaryColor: '#0F4D39',
+      darkMode: true,
+      logoUrl: null,
+      require2FA: false,
+      sessionTimeout: 60,
+      allowDirectLogin: true,
+      fromName: null,
+      fromEmail: null,
+      emailProvider: 'smtp',
+      cloudinaryEnabled: false,
+      cloudinaryFolder: null,
+      webhookUrl: null,
+      maintenanceMode: false,
+      announcement: null,
+    };
+    const clone = safeClone(defaults);
+    const now = Date.now();
+    settingsCache = { value: clone, expireAt: now + SETTINGS_CACHE_TTL_MS, setAt: now };
+    return res.json(clone);
+  } catch (e: any) {
+    console.error('Admin settings (GET) error:', e);
+    return res.status(500).json({ message: e?.message || 'Server error' });
+  }
+});
+
+router.put('/settings', adminAuth, async (req, res) => {
+  const role = String(req.user?.adminRole || '').toUpperCase();
+  if (role !== 'OWNER' && role !== 'SUPER_ADMIN') {
+    return res.status(403).json({ message: 'Access denied: settings require OWNER or SUPER_ADMIN' });
+  }
+  try {
+    const body = req.body || {};
+    // Helpers to coerce values
+    const toBool = (v: any) => {
+      if (typeof v === 'boolean') return v;
+      const s = String(v).toLowerCase();
+      return s === 'true' || s === '1' || s === 'on';
+    };
+    const toInt = (v: any) => {
+      const n = parseInt(String(v), 10);
+      return Number.isNaN(n) ? undefined : n;
+    };
+    let patch: any = {};
+    if (typeof body.appName !== 'undefined') patch.appName = String(body.appName);
+    if (typeof body.defaultLocale !== 'undefined') patch.defaultLocale = String(body.defaultLocale);
+    if (typeof body.timeZone !== 'undefined') patch.timeZone = String(body.timeZone);
+    if (typeof body.primaryColor !== 'undefined') patch.primaryColor = String(body.primaryColor);
+    if (typeof body.darkMode !== 'undefined') patch.darkMode = toBool(body.darkMode);
+    if (typeof body.logoUrl !== 'undefined') patch.logoUrl = body.logoUrl ? String(body.logoUrl) : null;
+    if (typeof body.require2FA !== 'undefined') patch.require2FA = toBool(body.require2FA);
+    if (typeof body.sessionTimeout !== 'undefined') { const v = toInt(body.sessionTimeout); if (typeof v !== 'undefined') patch.sessionTimeout = v; }
+    if (typeof body.allowDirectLogin !== 'undefined') patch.allowDirectLogin = toBool(body.allowDirectLogin);
+    if (typeof body.fromName !== 'undefined') patch.fromName = body.fromName ? String(body.fromName) : null;
+    if (typeof body.fromEmail !== 'undefined') patch.fromEmail = body.fromEmail ? String(body.fromEmail) : null;
+    if (typeof body.emailProvider !== 'undefined') patch.emailProvider = String(body.emailProvider);
+    if (typeof body.cloudinaryEnabled !== 'undefined') patch.cloudinaryEnabled = toBool(body.cloudinaryEnabled);
+    if (typeof body.cloudinaryFolder !== 'undefined') patch.cloudinaryFolder = body.cloudinaryFolder ? String(body.cloudinaryFolder) : null;
+    if (typeof body.webhookUrl !== 'undefined') patch.webhookUrl = body.webhookUrl ? String(body.webhookUrl) : null;
+    if (typeof body.maintenanceMode !== 'undefined') patch.maintenanceMode = toBool(body.maintenanceMode);
+    if (typeof body.announcement !== 'undefined') patch.announcement = body.announcement ? String(body.announcement) : null;
+
+    // Validate payload with Zod
+    const parsed = settingsPatchSchema.safeParse(patch);
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Invalid settings payload', errors: parsed.error.issues });
+    }
+    patch = parsed.data;
+
+    // Try Prisma Client first
+    try {
+      const existing = await (prisma as any).settings.findFirst({ orderBy: { updatedAt: 'desc' } });
+      if (existing) {
+        const updated = await (prisma as any).settings.update({ where: { id: existing.id }, data: patch });
+        settingsCache = { value: null, expireAt: 0, setAt: 0 };
+        return res.json(updated);
+      } else {
+        const created = await (prisma as any).settings.create({ data: { id: uuidv4(), ...patch } });
+        settingsCache = { value: null, expireAt: 0, setAt: 0 };
+        return res.json(created);
+      }
+    } catch (e1) {
+      // Fallback: ensure table exists and upsert via raw SQL
+      try {
+        await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS Settings (
+          id CHAR(36) NOT NULL,
+          appName VARCHAR(191) NOT NULL DEFAULT 'The Lodge Family',
+          defaultLocale VARCHAR(32) NOT NULL DEFAULT 'id-ID',
+          timeZone VARCHAR(64) NOT NULL DEFAULT 'Asia/Jakarta',
+          primaryColor VARCHAR(16) NOT NULL DEFAULT '#0F4D39',
+          darkMode BOOLEAN NOT NULL DEFAULT true,
+          logoUrl VARCHAR(255) NULL,
+          require2FA BOOLEAN NOT NULL DEFAULT false,
+          sessionTimeout INT NOT NULL DEFAULT 60,
+          allowDirectLogin BOOLEAN NOT NULL DEFAULT true,
+          fromName VARCHAR(191) NULL,
+          fromEmail VARCHAR(191) NULL,
+          emailProvider VARCHAR(64) NOT NULL DEFAULT 'smtp',
+          cloudinaryEnabled BOOLEAN NOT NULL DEFAULT false,
+          cloudinaryFolder VARCHAR(191) NULL,
+          webhookUrl VARCHAR(255) NULL,
+          maintenanceMode BOOLEAN NOT NULL DEFAULT false,
+          announcement TEXT NULL,
+          createdAt DATETIME(3) NOT NULL,
+          updatedAt DATETIME(3) NOT NULL,
+          PRIMARY KEY (id)
+        )`);
+      } catch {}
+      const rows: any = await prisma.$queryRawUnsafe(`SELECT * FROM Settings ORDER BY updatedAt DESC LIMIT 1`);
+      const now = new Date();
+      if (Array.isArray(rows) && rows.length) {
+        const curr = rows[0] || {};
+        const final = {
+          appName: typeof patch.appName !== 'undefined' ? patch.appName : curr.appName ?? 'The Lodge Family',
+          defaultLocale: typeof patch.defaultLocale !== 'undefined' ? patch.defaultLocale : curr.defaultLocale ?? 'id-ID',
+          timeZone: typeof patch.timeZone !== 'undefined' ? patch.timeZone : curr.timeZone ?? 'Asia/Jakarta',
+          primaryColor: typeof patch.primaryColor !== 'undefined' ? patch.primaryColor : curr.primaryColor ?? '#0F4D39',
+          darkMode: typeof patch.darkMode !== 'undefined' ? patch.darkMode : Boolean(curr.darkMode ?? true),
+          logoUrl: typeof patch.logoUrl !== 'undefined' ? patch.logoUrl : (curr.logoUrl ?? null),
+          require2FA: typeof patch.require2FA !== 'undefined' ? patch.require2FA : Boolean(curr.require2FA ?? false),
+          sessionTimeout: typeof patch.sessionTimeout !== 'undefined' ? patch.sessionTimeout : Number(curr.sessionTimeout ?? 60),
+          allowDirectLogin: typeof patch.allowDirectLogin !== 'undefined' ? patch.allowDirectLogin : Boolean(curr.allowDirectLogin ?? true),
+          fromName: typeof patch.fromName !== 'undefined' ? patch.fromName : (curr.fromName ?? null),
+          fromEmail: typeof patch.fromEmail !== 'undefined' ? patch.fromEmail : (curr.fromEmail ?? null),
+          emailProvider: typeof patch.emailProvider !== 'undefined' ? patch.emailProvider : curr.emailProvider ?? 'smtp',
+          cloudinaryEnabled: typeof patch.cloudinaryEnabled !== 'undefined' ? patch.cloudinaryEnabled : Boolean(curr.cloudinaryEnabled ?? false),
+          cloudinaryFolder: typeof patch.cloudinaryFolder !== 'undefined' ? patch.cloudinaryFolder : (curr.cloudinaryFolder ?? null),
+          webhookUrl: typeof patch.webhookUrl !== 'undefined' ? patch.webhookUrl : (curr.webhookUrl ?? null),
+          maintenanceMode: typeof patch.maintenanceMode !== 'undefined' ? patch.maintenanceMode : Boolean(curr.maintenanceMode ?? false),
+          announcement: typeof patch.announcement !== 'undefined' ? patch.announcement : (curr.announcement ?? null),
+        };
+        await prisma.$executeRaw`UPDATE Settings SET appName=${final.appName}, defaultLocale=${final.defaultLocale}, timeZone=${final.timeZone}, primaryColor=${final.primaryColor}, darkMode=${final.darkMode}, logoUrl=${final.logoUrl}, require2FA=${final.require2FA}, sessionTimeout=${final.sessionTimeout}, allowDirectLogin=${final.allowDirectLogin}, fromName=${final.fromName}, fromEmail=${final.fromEmail}, emailProvider=${final.emailProvider}, cloudinaryEnabled=${final.cloudinaryEnabled}, cloudinaryFolder=${final.cloudinaryFolder}, webhookUrl=${final.webhookUrl}, maintenanceMode=${final.maintenanceMode}, announcement=${final.announcement}, updatedAt=${now} WHERE id=${curr.id}`;
+        const updated: any = await prisma.$queryRaw`SELECT * FROM Settings WHERE id = ${curr.id}`;
+        settingsCache = { value: null, expireAt: 0, setAt: 0 };
+        return res.json(Array.isArray(updated) ? updated[0] : updated);
+      } else {
+        const id = uuidv4();
+        const defaults = {
+          appName: 'The Lodge Family',
+          defaultLocale: 'id-ID',
+          timeZone: 'Asia/Jakarta',
+          primaryColor: '#0F4D39',
+          darkMode: true,
+          logoUrl: null,
+          require2FA: false,
+          sessionTimeout: 60,
+          allowDirectLogin: true,
+          fromName: null,
+          fromEmail: null,
+          emailProvider: 'smtp',
+          cloudinaryEnabled: false,
+          cloudinaryFolder: null,
+          webhookUrl: null,
+          maintenanceMode: false,
+          announcement: null,
+        } as any;
+        const final = { ...defaults, ...patch };
+        await prisma.$executeRaw`INSERT INTO Settings (id, appName, defaultLocale, timeZone, primaryColor, darkMode, logoUrl, require2FA, sessionTimeout, allowDirectLogin, fromName, fromEmail, emailProvider, cloudinaryEnabled, cloudinaryFolder, webhookUrl, maintenanceMode, announcement, createdAt, updatedAt) VALUES (${id}, ${final.appName}, ${final.defaultLocale}, ${final.timeZone}, ${final.primaryColor}, ${final.darkMode}, ${final.logoUrl}, ${final.require2FA}, ${final.sessionTimeout}, ${final.allowDirectLogin}, ${final.fromName}, ${final.fromEmail}, ${final.emailProvider}, ${final.cloudinaryEnabled}, ${final.cloudinaryFolder}, ${final.webhookUrl}, ${final.maintenanceMode}, ${final.announcement}, ${now}, ${now})`;
+        const created: any = await prisma.$queryRaw`SELECT * FROM Settings WHERE id = ${id}`;
+        settingsCache = { value: null, expireAt: 0, setAt: 0 };
+        return res.json(Array.isArray(created) ? created[0] : created);
+      }
+    }
+  } catch (e: any) {
+    console.error('Admin settings (PUT) error:', e);
+    return res.status(500).json({ message: e?.message || 'Server error' });
   }
 });
 
