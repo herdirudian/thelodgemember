@@ -2,9 +2,10 @@ import { Router } from 'express';
 import { PrismaClient, RedemptionStatus, RegistrationStatus, TicketStatus, PromoType } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
-import { verifyPayload } from '../utils/security';
+import { verifyPayload, verifyFriendlyVoucherCode } from '../utils/security';
 import multer from 'multer';
 import dayjs from 'dayjs';
+import isoWeek from 'dayjs/plugin/isoWeek';
 import { v2 as cloudinary } from 'cloudinary';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
@@ -17,6 +18,7 @@ import { z } from 'zod'
 
 const prisma = new PrismaClient();
 const router = Router();
+dayjs.extend(isoWeek);
 
 // In-memory cache for Settings with TTL
 const SETTINGS_CACHE_TTL_MS = 60_000; // 60 seconds
@@ -187,14 +189,185 @@ router.get('/overview', adminAuth, async (_req, res) => {
   });
 });
 
-// Members listing
-router.get('/members', adminAuth, async (_req, res) => {
+// ==== Analytics Helpers ====
+function buildBuckets(period: 'daily'|'weekly'|'monthly', count: number) {
+  const now = dayjs();
+  const labels: string[] = [];
+  const edges: { start: Date; end: Date }[] = [];
+  if (period === 'daily') {
+    for (let i = count - 1; i >= 0; i--) {
+      const d = now.subtract(i, 'day');
+      const start = d.startOf('day');
+      const end = d.endOf('day');
+      labels.push(start.format('YYYY-MM-DD'));
+      edges.push({ start: start.toDate(), end: end.toDate() });
+    }
+  } else if (period === 'weekly') {
+    for (let i = count - 1; i >= 0; i--) {
+      const w = now.subtract(i, 'week');
+      const start = w.startOf('isoWeek');
+      const end = w.endOf('isoWeek');
+      labels.push(`${start.format('YYYY-[W]WW')}`);
+      edges.push({ start: start.toDate(), end: end.toDate() });
+    }
+  } else {
+    for (let i = count - 1; i >= 0; i--) {
+      const m = now.subtract(i, 'month');
+      const start = m.startOf('month');
+      const end = m.endOf('month');
+      labels.push(start.format('YYYY-MM'));
+      edges.push({ start: start.toDate(), end: end.toDate() });
+    }
+  }
+  return { labels, edges };
+}
+
+// ==== Analytics: Summary (points, vouchers, redeem) ====
+router.get('/analytics/summary', adminAuth, async (req, res) => {
   try {
-    const list = await prisma.member.findMany({
+    const periodParam = String((req.query.period || req.query.range || 'monthly')).toLowerCase();
+    const period: 'daily'|'weekly'|'monthly' = ['daily','weekly','monthly'].includes(periodParam) ? (periodParam as any) : 'monthly';
+    const bucketCountDefault = period === 'daily' ? 30 : period === 'weekly' ? 12 : 12;
+    const bucketCount = Math.max(1, Math.min(180, parseInt(String(req.query.count || bucketCountDefault)) || bucketCountDefault));
+    const { labels, edges } = buildBuckets(period, bucketCount);
+
+    const globalStart = edges[0].start;
+    const globalEnd = edges[edges.length - 1].end;
+
+    const [tickets, prAll, redeemHistory] = await Promise.all([
+      prisma.ticket.findMany({ where: { createdAt: { gte: globalStart, lte: globalEnd } }, select: { createdAt: true, redeemedAt: true } }),
+      prisma.pointRedemption.findMany({ where: { OR: [ { createdAt: { gte: globalStart, lte: globalEnd } }, { redeemedAt: { gte: globalStart, lte: globalEnd } } ] }, select: { createdAt: true, redeemedAt: true, pointsUsed: true } }),
+      prisma.redeemHistory.findMany({ where: { redeemedAt: { gte: globalStart, lte: globalEnd } }, select: { redeemedAt: true } }),
+    ]);
+
+    const pointsUsedSeries = labels.map((_, idx) => {
+      const edge = edges[idx];
+      return prAll.filter(pr => pr.createdAt >= edge.start && pr.createdAt <= edge.end)
+        .reduce((sum, pr) => sum + (pr.pointsUsed || 0), 0);
+    });
+    const pointsRedeemedSeries = labels.map((_, idx) => {
+      const edge = edges[idx];
+      return prAll.filter(pr => pr.redeemedAt && pr.redeemedAt >= edge.start && pr.redeemedAt <= edge.end).length;
+    });
+    const vouchersIssuedSeries = labels.map((_, idx) => {
+      const edge = edges[idx];
+      return tickets.filter(t => t.createdAt >= edge.start && t.createdAt <= edge.end).length;
+    });
+    const vouchersRedeemedSeries = labels.map((_, idx) => {
+      const edge = edges[idx];
+      return tickets.filter(t => t.redeemedAt && t.redeemedAt >= edge.start && t.redeemedAt <= edge.end).length;
+    });
+    const redeemTotalSeries = labels.map((_, idx) => {
+      const edge = edges[idx];
+      return redeemHistory.filter(r => r.redeemedAt >= edge.start && r.redeemedAt <= edge.end).length;
+    });
+
+    return res.json({ period, labels, points: { pointsUsedSeries, pointsRedeemedSeries }, vouchers: { vouchersIssuedSeries, vouchersRedeemedSeries }, redeem: { redeemTotalSeries } });
+  } catch (e: any) {
+    console.error('Analytics summary error:', e);
+    res.status(500).json({ message: e?.message || 'Server error' });
+  }
+});
+
+// ==== Analytics: Members (new join, active, event participation) ====
+router.get('/analytics/members', adminAuth, async (req, res) => {
+  try {
+    const periodParam = String((req.query.period || req.query.range || 'monthly')).toLowerCase();
+    const period: 'daily'|'weekly'|'monthly' = ['daily','weekly','monthly'].includes(periodParam) ? (periodParam as any) : 'monthly';
+    const bucketCountDefault = period === 'daily' ? 30 : period === 'weekly' ? 12 : 12;
+    const bucketCount = Math.max(1, Math.min(180, parseInt(String(req.query.count || bucketCountDefault)) || bucketCountDefault));
+    const { labels, edges } = buildBuckets(period, bucketCount);
+
+    const globalStart = edges[0].start;
+    const globalEnd = edges[edges.length - 1].end;
+    const [members, tickets, redemptions, regs] = await Promise.all([
+      prisma.member.findMany({ where: { registrationDate: { gte: globalStart, lte: globalEnd } }, select: { registrationDate: true, id: true } }),
+      prisma.ticket.findMany({ where: { createdAt: { gte: globalStart, lte: globalEnd } }, select: { createdAt: true, memberId: true } }),
+      prisma.pointRedemption.findMany({ where: { createdAt: { gte: globalStart, lte: globalEnd } }, select: { createdAt: true, memberId: true } }),
+      prisma.eventRegistration.findMany({ where: { createdAt: { gte: globalStart, lte: globalEnd } }, select: { createdAt: true, memberId: true, status: true } }),
+    ]);
+
+    const newJoinSeries = labels.map((_, idx) => {
+      const edge = edges[idx];
+      return members.filter(m => m.registrationDate >= edge.start && m.registrationDate <= edge.end).length;
+    });
+    const eventParticipationSeries = labels.map((_, idx) => {
+      const edge = edges[idx];
+      return regs.filter(r => r.createdAt >= edge.start && r.createdAt <= edge.end).length;
+    });
+    const activeMembersSeries = labels.map((_, idx) => {
+      const edge = edges[idx];
+      const set = new Set<string>();
+      tickets.forEach(t => { if (t.createdAt >= edge.start && t.createdAt <= edge.end) set.add(t.memberId); });
+      redemptions.forEach(r => { if (r.createdAt >= edge.start && r.createdAt <= edge.end) set.add(r.memberId); });
+      regs.forEach(r => { if (r.createdAt >= edge.start && r.createdAt <= edge.end) set.add(r.memberId); });
+      return set.size;
+    });
+
+    return res.json({ period, labels, members: { newJoinSeries, activeMembersSeries, eventParticipationSeries } });
+  } catch (e: any) {
+    console.error('Analytics members error:', e);
+    res.status(500).json({ message: e?.message || 'Server error' });
+  }
+});
+
+// ==== Analytics: Promos (used by PointRedemption.promoId, views placeholder) ====
+router.get('/analytics/promos', adminAuth, async (req, res) => {
+  try {
+    const periodParam = String((req.query.period || req.query.range || 'monthly')).toLowerCase();
+    const period: 'daily'|'weekly'|'monthly' = ['daily','weekly','monthly'].includes(periodParam) ? (periodParam as any) : 'monthly';
+    const bucketCountDefault = period === 'daily' ? 30 : period === 'weekly' ? 12 : 12;
+    const bucketCount = Math.max(1, Math.min(180, parseInt(String(req.query.count || bucketCountDefault)) || bucketCountDefault));
+    const { labels, edges } = buildBuckets(period, bucketCount);
+
+    const globalStart = edges[0].start;
+    const globalEnd = edges[edges.length - 1].end;
+    const [promos, redemptions] = await Promise.all([
+      prisma.promo.findMany({ select: { id: true, title: true, type: true } }),
+      prisma.pointRedemption.findMany({ where: { createdAt: { gte: globalStart, lte: globalEnd }, promoId: { not: null } }, select: { createdAt: true, promoId: true } }),
+    ]);
+
+    const usedSeries = labels.map((_, idx) => {
+      const edge = edges[idx];
+      return redemptions.filter(r => r.createdAt >= edge.start && r.createdAt <= edge.end).length;
+    });
+    const byPromo = promos.map(p => ({ promoId: p.id, title: p.title, type: p.type, usedCount: redemptions.filter(r => r.promoId === p.id).length }));
+    const viewsSeries = labels.map(() => 0);
+
+    return res.json({ period, labels, usedSeries, viewsSeries, byPromo });
+  } catch (e: any) {
+    console.error('Analytics promos error:', e);
+    res.status(500).json({ message: e?.message || 'Server error' });
+  }
+});
+
+// Members listing
+router.get('/members', adminAuth, async (req, res) => {
+  try {
+    const { page, limit } = req.query as { page?: string; limit?: string };
+    const hasPagination = Boolean(page) || Boolean(limit);
+    const pageNum = page ? Math.max(1, parseInt(page, 10) || 1) : 1;
+    const limitNum = limit ? Math.max(1, Math.min(500, parseInt(limit, 10) || 100)) : 100;
+
+    const findOpts: any = {
       include: { user: true },
       orderBy: { registrationDate: 'desc' },
-      take: 100,
-    });
+      take: limitNum,
+    };
+    if (hasPagination) {
+      findOpts.skip = (pageNum - 1) * limitNum;
+    }
+
+    const list = await prisma.member.findMany(findOpts);
+
+    if (hasPagination) {
+      try {
+        const total = await prisma.member.count();
+        res.setHeader('X-Total-Count', String(total));
+        res.setHeader('X-Page', String(pageNum));
+        res.setHeader('X-Limit', String(limitNum));
+      } catch {}
+    }
     res.json(list);
   } catch (e: any) {
     console.error('Admin members error:', e);
@@ -276,16 +449,65 @@ router.get('/members/:id/points/redemptions', adminAuth, async (req, res) => {
 });
 
 // Registration codes
+router.get('/registration-codes', adminAuth, async (req, res) => {
+  try {
+    const codes = await prisma.registrationCode.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(codes);
+  } catch (e: any) {
+    console.error('Get registration codes error:', e);
+    res.status(500).json({ message: e?.message || 'Server error' });
+  }
+});
+
 router.post('/registration-codes', adminAuth, async (req, res) => {
-  const { code, expiresAt, isActive } = req.body as { code?: string; expiresAt?: string; isActive?: boolean };
-  const payload = {
-    code: code || `CODE-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
-    isActive: isActive ?? true,
-    expiresAt: expiresAt ? new Date(expiresAt) : undefined,
-    createdBy: 'admin',
-  };
-  const created = await prisma.registrationCode.create({ data: payload });
-  res.json(created);
+  try {
+    const { code, expiresAt, isActive } = req.body as { code?: string; expiresAt?: string; isActive?: boolean };
+    const payload = {
+      code: code || `CODE-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+      isActive: isActive ?? true,
+      expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+      createdBy: 'admin',
+    };
+    const created = await prisma.registrationCode.create({ data: payload });
+    res.json(created);
+  } catch (e: any) {
+    console.error('Create registration code error:', e);
+    res.status(500).json({ message: e?.message || 'Server error' });
+  }
+});
+
+router.put('/registration-codes/:id', adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { code, expiresAt, isActive } = req.body as { code?: string; expiresAt?: string; isActive?: boolean };
+    
+    const updateData: any = {};
+    if (typeof code !== 'undefined') updateData.code = code;
+    if (typeof expiresAt !== 'undefined') updateData.expiresAt = expiresAt ? new Date(expiresAt) : null;
+    if (typeof isActive !== 'undefined') updateData.isActive = isActive;
+
+    const updated = await prisma.registrationCode.update({
+      where: { id },
+      data: updateData
+    });
+    res.json(updated);
+  } catch (e: any) {
+    console.error('Update registration code error:', e);
+    res.status(500).json({ message: e?.message || 'Server error' });
+  }
+});
+
+router.delete('/registration-codes/:id', adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.registrationCode.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('Delete registration code error:', e);
+    res.status(500).json({ message: e?.message || 'Server error' });
+  }
 });
 
 // Announcements
@@ -299,7 +521,7 @@ router.post('/announcements', adminAuth, async (req, res) => {
 // Events CRUD
 router.post('/events', adminAuth, upload.single('image'), async (req: any, res) => {
   try {
-    const { title, description, eventDate, quota } = req.body as { title: string; description: string; eventDate: string; quota: string };
+    const { title, description, eventDate, quota, location, terms, promoType, promoStartDate, promoEndDate } = req.body as { title: string; description: string; eventDate: string; quota: string; location?: string; terms?: string; promoType?: string; promoStartDate?: string; promoEndDate?: string };
     if (!title || !description || !eventDate || !quota) return res.status(400).json({ message: 'Missing fields' });
     let imageUrl: string | undefined = undefined;
     if (req.file) {
@@ -324,7 +546,31 @@ router.post('/events', adminAuth, upload.single('image'), async (req: any, res) 
       eventDate: dayjs(eventDate).toDate(),
       quota: parseInt(quota, 10),
       imageUrl,
+      location: location || undefined,
+      terms: terms || undefined,
     } });
+    // Optional: auto-create linked promo based on provided category and date range
+    const typeUpper = (promoType || '').toUpperCase();
+    if (typeUpper === 'EVENT' || typeUpper === 'EXCLUSIVE_MEMBER') {
+      if (promoStartDate && promoEndDate) {
+        try {
+          await prisma.promo.create({ data: {
+            title,
+            description,
+            startDate: dayjs(promoStartDate).toDate(),
+            endDate: dayjs(promoEndDate).toDate(),
+            imageUrl,
+            type: typeUpper as any,
+            quota: parseInt(quota, 10),
+            eventId: created.id,
+            showMoreButton: true,
+            showJoinButton: true,
+          } });
+        } catch (e) {
+          console.error('Create promo for event failed:', e);
+        }
+      }
+    }
     res.json(created);
   } catch (e) {
     console.error(e);
@@ -437,7 +683,7 @@ router.get('/members/:id/points/adjustments', adminAuth, async (req, res) => {
 
 router.get('/activities', adminAuth, async (req, res) => {
   try {
-    const { start, end, adminId, method } = req.query as { start?: string; end?: string; adminId?: string; method?: string };
+    const { start, end, adminId, method, page, limit } = req.query as { start?: string; end?: string; adminId?: string; method?: string; page?: string; limit?: string };
     const where: any = {};
     if (start || end) {
       where.createdAt = {};
@@ -446,11 +692,24 @@ router.get('/activities', adminAuth, async (req, res) => {
     }
     if (adminId) where.adminId = String(adminId);
     if (method) where.method = String(method).toUpperCase();
+
+    const hasPagination = Boolean(page) || Boolean(limit);
+    const pageNum = page ? Math.max(1, parseInt(page, 10) || 1) : 1;
+    const limitNum = limit ? Math.max(1, Math.min(1000, parseInt(limit, 10) || 500)) : 500;
+
     try {
-      const list = await (prisma as any).adminActivity.findMany({ where, orderBy: { createdAt: 'desc' }, take: 500 });
+      const list = await (prisma as any).adminActivity.findMany({ where, orderBy: { createdAt: 'desc' }, take: limitNum, skip: hasPagination ? (pageNum - 1) * limitNum : undefined });
+      if (hasPagination) {
+        try {
+          const total = await (prisma as any).adminActivity.count({ where });
+          res.setHeader('X-Total-Count', String(total));
+          res.setHeader('X-Page', String(pageNum));
+          res.setHeader('X-Limit', String(limitNum));
+        } catch {}
+      }
       return res.json({ activities: list });
     } catch {
-      // Fallback raw query
+      // Fallback raw query dengan pagination
       const clauses: string[] = [];
       const params: any[] = [];
       if (start) { clauses.push(`createdAt >= ?`); params.push(new Date(start)); }
@@ -458,7 +717,18 @@ router.get('/activities', adminAuth, async (req, res) => {
       if (adminId) { clauses.push(`adminId = ?`); params.push(String(adminId)); }
       if (method) { clauses.push(`method = ?`); params.push(String(method).toUpperCase()); }
       const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-      const rows: any = await prisma.$queryRawUnsafe(`SELECT * FROM AdminActivity ${whereSql} ORDER BY createdAt DESC LIMIT 500`, ...params);
+      const lim = limitNum;
+      const off = hasPagination ? (pageNum - 1) * limitNum : 0;
+      const rows: any = await prisma.$queryRawUnsafe(`SELECT * FROM AdminActivity ${whereSql} ORDER BY createdAt DESC LIMIT ? OFFSET ?`, ...params, lim, off);
+      if (hasPagination) {
+        try {
+          const countRows: any = await prisma.$queryRawUnsafe(`SELECT COUNT(*) as cnt FROM AdminActivity ${whereSql}`, ...params);
+          const total = Array.isArray(countRows) && countRows.length ? Number(countRows[0].cnt || 0) : 0;
+          res.setHeader('X-Total-Count', String(total));
+          res.setHeader('X-Page', String(pageNum));
+          res.setHeader('X-Limit', String(limitNum));
+        } catch {}
+      }
       return res.json({ activities: rows });
     }
   } catch (e: any) {
@@ -470,7 +740,7 @@ router.get('/activities', adminAuth, async (req, res) => {
 // Slider Images management
 router.post('/slider-images', adminAuth, upload.single('image'), async (req: any, res) => {
   try {
-    const { title } = req.body as { title?: string };
+    const { title, position } = req.body as { title?: string; position?: string };
     let imageUrl: string | undefined = undefined;
     if (!req.file) return res.status(400).json({ message: 'Image is required' });
     if (cloudinary.config().cloud_name) {
@@ -489,9 +759,22 @@ router.post('/slider-images', adminAuth, upload.single('image'), async (req: any
     const adminUser = await prisma.user.findUnique({ where: { id: req.user?.uid } });
     const createdBy = adminUser?.email || adminUser?.id || 'admin';
 
+    // Determine next position if not provided
+    let posNum: number | undefined = undefined;
+    try {
+      const list = await (prisma as any).sliderImage.findMany({ select: { position: true } });
+      const max = list.reduce((m: number, it: any) => Math.max(m, Number(it?.position || 0)), 0);
+      posNum = position ? Number(position) : (max + 1);
+    } catch {
+      try { await prisma.$executeRawUnsafe(`ALTER TABLE SliderImage ADD COLUMN position INT NULL`); } catch {}
+      const rows: any = await prisma.$queryRawUnsafe(`SELECT MAX(position) as mx FROM SliderImage`);
+      const max = Array.isArray(rows) && rows.length ? Number(rows[0].mx || 0) : 0;
+      posNum = position ? Number(position) : (max + 1);
+    }
+
     // Try prisma model first; fallback to raw SQL if needed
     try {
-      const created = await (prisma as any).sliderImage.create({ data: { imageUrl, title, createdBy } });
+      const created = await (prisma as any).sliderImage.create({ data: { imageUrl, title, createdBy, position: posNum } });
       return res.json(created);
     } catch (e1) {
       try {
@@ -499,14 +782,15 @@ router.post('/slider-images', adminAuth, upload.single('image'), async (req: any
           id CHAR(36) NOT NULL,
           imageUrl VARCHAR(255) NOT NULL,
           title VARCHAR(191) NULL,
+          position INT NULL,
           createdAt DATETIME(3) NOT NULL,
           createdBy VARCHAR(191) NULL,
           PRIMARY KEY (id)
         )`);
       } catch {}
       const id = uuidv4();
-      await prisma.$executeRaw`INSERT INTO SliderImage (id, imageUrl, title, createdAt, createdBy) VALUES (${id}, ${imageUrl}, ${title ?? null}, ${new Date()}, ${createdBy ?? null})`;
-      const row: any = { id, imageUrl, title: title ?? null, createdAt: new Date(), createdBy: createdBy ?? null };
+      await prisma.$executeRaw`INSERT INTO SliderImage (id, imageUrl, title, position, createdAt, createdBy) VALUES (${id}, ${imageUrl}, ${title ?? null}, ${posNum ?? null}, ${new Date()}, ${createdBy ?? null})`;
+      const row: any = { id, imageUrl, title: title ?? null, position: posNum ?? null, createdAt: new Date(), createdBy: createdBy ?? null };
       return res.json(row);
     }
   } catch (e: any) {
@@ -518,7 +802,7 @@ router.post('/slider-images', adminAuth, upload.single('image'), async (req: any
 router.get('/slider-images', adminAuth, async (req: any, res) => {
   try {
     try {
-      const list = await (prisma as any).sliderImage.findMany({ orderBy: { createdAt: 'desc' } });
+      const list = await (prisma as any).sliderImage.findMany({ orderBy: [{ position: 'asc' }, { createdAt: 'desc' }] });
       return res.json(list);
     } catch (e1) {
       try {
@@ -526,12 +810,14 @@ router.get('/slider-images', adminAuth, async (req: any, res) => {
           id CHAR(36) NOT NULL,
           imageUrl VARCHAR(255) NOT NULL,
           title VARCHAR(191) NULL,
+          position INT NULL,
           createdAt DATETIME(3) NOT NULL,
           createdBy VARCHAR(191) NULL,
           PRIMARY KEY (id)
         )`);
       } catch {}
-      const list: any = await prisma.$queryRawUnsafe(`SELECT id, imageUrl, title, createdAt, createdBy FROM SliderImage ORDER BY createdAt DESC`);
+      try { await prisma.$executeRawUnsafe(`ALTER TABLE SliderImage ADD COLUMN position INT NULL`); } catch {}
+      const list: any = await prisma.$queryRawUnsafe(`SELECT id, imageUrl, title, position, createdAt, createdBy FROM SliderImage ORDER BY position ASC, createdAt DESC`);
       return res.json(list);
     }
   } catch (e: any) {
@@ -540,6 +826,25 @@ router.get('/slider-images', adminAuth, async (req: any, res) => {
   }
 });
 
+// Update slider image (title/position)
+router.put('/slider-images/:id', adminAuth, async (req: any, res) => {
+  try {
+    const id = req.params.id;
+    const { title, position } = req.body as { title?: string; position?: number | string };
+    const posNum = typeof position !== 'undefined' ? Number(position) : undefined;
+    try {
+      const updated = await (prisma as any).sliderImage.update({ where: { id }, data: { title: (typeof title !== 'undefined' ? title : undefined), position: (typeof posNum !== 'undefined' ? posNum : undefined) } });
+      return res.json(updated);
+    } catch (e1) {
+      try { await prisma.$executeRawUnsafe(`ALTER TABLE SliderImage ADD COLUMN position INT NULL`); } catch {}
+      const rows: any = await prisma.$executeRaw`UPDATE SliderImage SET title = ${typeof title !== 'undefined' ? title : undefined}, position = ${typeof posNum !== 'undefined' ? posNum : undefined} WHERE id = ${id}`;
+      return res.json({ success: true });
+    }
+  } catch (e: any) {
+    console.error('Admin slider update error:', e);
+    res.status(500).json({ message: e?.message || 'Server error' });
+  }
+});
 router.delete('/slider-images/:id', adminAuth, async (req: any, res) => {
   try {
     const id = req.params.id;
@@ -591,7 +896,7 @@ router.get('/events/:id/participants', adminAuth, async (req, res) => {
 });
 
 router.put('/events/:id', adminAuth, upload.single('image'), async (req: any, res) => {
-  const { title, description, eventDate, quota } = req.body as { title?: string; description?: string; eventDate?: string; quota?: string };
+  const { title, description, eventDate, quota, location, terms, promoType, promoStartDate, promoEndDate } = req.body as { title?: string; description?: string; eventDate?: string; quota?: string; location?: string; terms?: string; promoType?: string; promoStartDate?: string; promoEndDate?: string };
   let imageUrl: string | undefined = undefined;
   if (req.file && cloudinary.config().cloud_name) {
     const temp = await cloudinary.uploader.upload(`data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`, { folder: 'thelodge/events' });
@@ -603,7 +908,40 @@ router.put('/events/:id', adminAuth, upload.single('image'), async (req: any, re
   if (eventDate) data.eventDate = dayjs(eventDate).toDate();
   if (quota) data.quota = parseInt(quota, 10);
   if (imageUrl) data.imageUrl = imageUrl;
+  if (typeof location !== 'undefined') data.location = location || null;
+  if (typeof terms !== 'undefined') data.terms = terms || null;
   const updated = await prisma.event.update({ where: { id: req.params.id }, data });
+
+  // Optional: upsert linked promo when request contains promo fields
+  const typeUpper = (promoType || '').toUpperCase();
+  if (typeUpper === 'EVENT' || typeUpper === 'EXCLUSIVE_MEMBER') {
+    const promoData: any = {};
+    if (title) promoData.title = title;
+    if (description) promoData.description = description;
+    if (promoStartDate) promoData.startDate = dayjs(promoStartDate).toDate();
+    if (promoEndDate) promoData.endDate = dayjs(promoEndDate).toDate();
+    if (imageUrl) promoData.imageUrl = imageUrl;
+    promoData.type = typeUpper;
+    if (quota) promoData.quota = parseInt(quota, 10);
+    promoData.eventId = updated.id;
+
+    // Find existing promo linked to this event with same category
+    const existing = await prisma.promo.findFirst({ where: { eventId: updated.id, type: typeUpper as any } });
+    if (existing) {
+      try {
+        await prisma.promo.update({ where: { id: existing.id }, data: promoData });
+      } catch (e) {
+        console.error('Update promo for event failed:', e);
+      }
+    } else {
+      try {
+        await prisma.promo.create({ data: { title: updated.title, description: updated.description, startDate: promoData.startDate || dayjs().toDate(), endDate: promoData.endDate || dayjs().toDate(), imageUrl: promoData.imageUrl || undefined, type: typeUpper as any, quota: (typeof updated.quota === 'number' ? updated.quota : undefined), eventId: updated.id, showMoreButton: true, showJoinButton: true } });
+      } catch (e) {
+        console.error('Create promo for event failed:', e);
+      }
+    }
+  }
+
   res.json(updated);
 });
 
@@ -614,10 +952,51 @@ router.delete('/events/:id', adminAuth, async (req, res) => {
 
 // QR Redeem Center
 router.post('/redeem', adminAuth, async (req, res) => {
-  const { data, hash } = req.body as { data?: string; hash?: string };
-  if (!data || !hash) return res.status(400).json({ message: 'Missing data' });
-  const payload = verifyPayload(data, hash);
-  if (!payload) return res.status(400).json({ message: 'Invalid QR' });
+  const { data, hash, friendlyCode } = req.body as { data?: string; hash?: string; friendlyCode?: string };
+  
+  // Support both traditional QR code and friendly voucher code
+  let payload: any = null;
+  
+  if (friendlyCode) {
+    // Try to verify using friendly voucher code
+    // First, we need to find the voucher with this friendly code
+    const ticket = await prisma.ticket.findFirst({ where: { friendlyCode } });
+    if (ticket) {
+      const ticketPayload = { type: 'ticket', ticketName: ticket.name, memberId: ticket.memberId, ticketId: ticket.id };
+      if (verifyFriendlyVoucherCode(friendlyCode, ticketPayload)) {
+        payload = ticketPayload;
+      }
+    }
+    
+    if (!payload) {
+      const pointRedemption = await prisma.pointRedemption.findFirst({ where: { friendlyCode } });
+      if (pointRedemption) {
+        const pointPayload = { type: 'points', memberId: pointRedemption.memberId, redemptionId: pointRedemption.id };
+        if (verifyFriendlyVoucherCode(friendlyCode, pointPayload)) {
+          payload = pointPayload;
+        }
+      }
+    }
+    
+    if (!payload) {
+      const eventReg = await prisma.eventRegistration.findFirst({ where: { friendlyCode } });
+      if (eventReg) {
+        const eventPayload = { type: 'event', eventId: eventReg.eventId, memberId: eventReg.memberId, registrationId: eventReg.id };
+        if (verifyFriendlyVoucherCode(friendlyCode, eventPayload)) {
+          payload = eventPayload;
+        }
+      }
+    }
+    
+    if (!payload) {
+      return res.status(400).json({ message: 'Invalid voucher code' });
+    }
+  } else {
+    // Traditional QR code verification
+    if (!data || !hash) return res.status(400).json({ message: 'Missing data' });
+    payload = verifyPayload(data, hash);
+    if (!payload) return res.status(400).json({ message: 'Invalid QR' });
+  }
 
   try {
     // Ambil info admin untuk pencatatan
@@ -897,7 +1276,7 @@ router.get('/members/:id/points/adjustments', adminAuth, async (req, res) => {
 
 router.get('/activities', adminAuth, async (req, res) => {
   try {
-    const { start, end, adminId, method } = req.query as { start?: string; end?: string; adminId?: string; method?: string };
+    const { start, end, adminId, method, page, limit } = req.query as { start?: string; end?: string; adminId?: string; method?: string; page?: string; limit?: string };
     const where: any = {};
     if (start || end) {
       where.createdAt = {};
@@ -906,11 +1285,23 @@ router.get('/activities', adminAuth, async (req, res) => {
     }
     if (adminId) where.adminId = String(adminId);
     if (method) where.method = String(method).toUpperCase();
+
+    const hasPagination = Boolean(page) || Boolean(limit);
+    const pageNum = page ? Math.max(1, parseInt(page, 10) || 1) : 1;
+    const limitNum = limit ? Math.max(1, Math.min(1000, parseInt(limit, 10) || 500)) : 500;
+
     try {
-      const list = await (prisma as any).adminActivity.findMany({ where, orderBy: { createdAt: 'desc' }, take: 500 });
+      const list = await (prisma as any).adminActivity.findMany({ where, orderBy: { createdAt: 'desc' }, take: limitNum, skip: hasPagination ? (pageNum - 1) * limitNum : undefined });
+      if (hasPagination) {
+        try {
+          const total = await (prisma as any).adminActivity.count({ where });
+          res.setHeader('X-Total-Count', String(total));
+          res.setHeader('X-Page', String(pageNum));
+          res.setHeader('X-Limit', String(limitNum));
+        } catch {}
+      }
       return res.json({ activities: list });
     } catch {
-      // Fallback raw query
       const clauses: string[] = [];
       const params: any[] = [];
       if (start) { clauses.push(`createdAt >= ?`); params.push(new Date(start)); }
@@ -918,7 +1309,18 @@ router.get('/activities', adminAuth, async (req, res) => {
       if (adminId) { clauses.push(`adminId = ?`); params.push(String(adminId)); }
       if (method) { clauses.push(`method = ?`); params.push(String(method).toUpperCase()); }
       const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-      const rows: any = await prisma.$queryRawUnsafe(`SELECT * FROM AdminActivity ${whereSql} ORDER BY createdAt DESC LIMIT 500`, ...params);
+      const lim = limitNum;
+      const off = hasPagination ? (pageNum - 1) * limitNum : 0;
+      const rows: any = await prisma.$queryRawUnsafe(`SELECT * FROM AdminActivity ${whereSql} ORDER BY createdAt DESC LIMIT ? OFFSET ?`, ...params, lim, off);
+      if (hasPagination) {
+        try {
+          const countRows: any = await prisma.$queryRawUnsafe(`SELECT COUNT(*) as cnt FROM AdminActivity ${whereSql}`, ...params);
+          const total = Array.isArray(countRows) && countRows.length ? Number(countRows[0].cnt || 0) : 0;
+          res.setHeader('X-Total-Count', String(total));
+          res.setHeader('X-Page', String(pageNum));
+          res.setHeader('X-Limit', String(limitNum));
+        } catch {}
+      }
       return res.json({ activities: rows });
     }
   } catch (e: any) {

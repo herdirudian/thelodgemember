@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import dayjs from 'dayjs';
-import { signPayload } from '../utils/security';
+import { signPayload, signPayloadWithFriendlyCode } from '../utils/security';
 import { generateQRDataURL } from '../utils/qr';
 import { v4 as uuidv4 } from 'uuid';
 import { createMembershipCardPDF } from '../utils/pdf';
@@ -72,7 +72,10 @@ router.get('/me', authMiddleware, async (req: any, res) => {
 router.post('/tickets/redeem-free', authMiddleware, async (req: any, res) => {
   try {
     const userId = req.user.uid as string;
-    const member = await prisma.member.findUnique({ where: { userId } });
+    const member = await prisma.member.findUnique({ 
+      where: { userId },
+      include: { user: true }
+    });
     if (!member) return res.status(404).json({ message: 'Member not found' });
     const existing = await prisma.ticket.findFirst({ where: { memberId: member.id } });
     if (existing) return res.status(400).json({ message: 'Free ticket already redeemed' });
@@ -83,7 +86,7 @@ router.post('/tickets/redeem-free', authMiddleware, async (req: any, res) => {
     // Generate deterministic payload using ticket UUID
     const ticketId = uuidv4();
     const payload = { type: 'ticket', ticketName, memberId: member.id, ticketId };
-    const { data, hash } = signPayload(payload);
+    const { data, hash, friendlyCode } = signPayloadWithFriendlyCode(payload);
     const qrUrl = `${config.appUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}`;
     const qrDataURL = await generateQRDataURL(qrUrl);
 
@@ -93,7 +96,60 @@ router.post('/tickets/redeem-free', authMiddleware, async (req: any, res) => {
       name: ticketName,
       validDate,
       qrPayloadHash: hash,
+      friendlyCode,
     }});
+
+    // Send email notification with e-voucher
+    try {
+      const { sendEmail } = await import('../utils/email');
+      const emailSubject = 'E-Voucher Tiket Gratis - The Lodge Family';
+      
+      // Create QR code attachment
+      const qrBuffer = Buffer.from(qrDataURL.split(',')[1], 'base64');
+      const attachments = [{
+        filename: 'qr-code.png',
+        content: qrBuffer,
+        cid: 'qrcode'
+      }];
+      
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+          <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <h2 style="color: #0F4D39; text-align: center; margin-bottom: 30px;">E-Voucher Tiket Gratis</h2>
+            
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <h3 style="color: #0F4D39; margin-top: 0;">Detail Tiket</h3>
+              <p><strong>Nama Tiket:</strong> ${ticketName}</p>
+              <p><strong>Nama Member:</strong> ${member.fullName}</p>
+              <p><strong>Kode Voucher:</strong> ${friendlyCode}</p>
+              <p><strong>Berlaku Hingga:</strong> ${validDate.toLocaleDateString('id-ID')}</p>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <img src="cid:qrcode" alt="QR Code Tiket" style="max-width: 200px; border: 1px solid #ddd; padding: 10px; background: white;">
+            </div>
+            
+            <div style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; border-left: 4px solid #0F4D39;">
+              <h4 style="color: #0F4D39; margin-top: 0;">Cara Menggunakan:</h4>
+              <ol style="margin: 0; padding-left: 20px;">
+                <li>Tunjukkan QR code ini saat datang ke lokasi</li>
+                <li>Atau berikan kode voucher: <strong>${friendlyCode}</strong></li>
+                <li>Tiket berlaku hingga ${validDate.toLocaleDateString('id-ID')}</li>
+              </ol>
+            </div>
+            
+            <p style="text-align: center; margin-top: 30px; color: #666; font-size: 14px;">
+              Terima kasih telah menjadi member The Lodge Family!
+            </p>
+          </div>
+        </div>
+      `;
+      
+      await sendEmail(member.user.email, emailSubject, emailHtml, undefined, attachments);
+    } catch (emailError) {
+      console.error('Failed to send ticket email:', emailError);
+      // Don't fail the request if email fails
+    }
 
     res.json({ ticket: { ...ticket, qr: qrDataURL } });
   } catch (e) {
@@ -115,7 +171,7 @@ router.get('/tickets/my', authMiddleware, async (req: any, res) => {
 
     // Rebuild QR for each ticket using deterministic payload
     const enriched = await Promise.all(tickets.map(async (t) => {
-      const { data, hash } = signPayload({
+      const { data, hash, friendlyCode } = signPayloadWithFriendlyCode({
         type: 'ticket',
         ticketName: t.name,
         memberId: t.memberId,
@@ -124,7 +180,7 @@ router.get('/tickets/my', authMiddleware, async (req: any, res) => {
       // Prefer stored hash for consistency
       const qrUrl = `${config.appUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${t.qrPayloadHash || hash}`;
       const qr = await generateQRDataURL(qrUrl);
-      return { ...t, qr };
+      return { ...t, qr, friendlyCode: t.friendlyCode || friendlyCode };
     }));
 
     res.json({ tickets: enriched });
@@ -156,7 +212,10 @@ router.get('/events', authMiddleware, async (req: any, res) => {
 router.post('/events/:id/register', authMiddleware, async (req: any, res) => {
   try {
     const userId = req.user.uid as string;
-    const member = await prisma.member.findUnique({ where: { userId } });
+    const member = await prisma.member.findUnique({ 
+      where: { userId },
+      include: { user: true }
+    });
     if (!member) return res.status(404).json({ message: 'Member not found' });
     const eventId = req.params.id;
     const ev = await prisma.event.findUnique({ where: { id: eventId } });
@@ -167,7 +226,7 @@ router.post('/events/:id/register', authMiddleware, async (req: any, res) => {
     if (existing) return res.status(409).json({ message: 'Already registered' });
 
     const registrationId = uuidv4();
-    const { data, hash } = signPayload({ type: 'event', eventId, memberId: member.id, registrationId });
+    const { data, hash, friendlyCode } = signPayloadWithFriendlyCode({ type: 'event', eventId, memberId: member.id, registrationId });
     const qrUrl = `${config.appUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}`;
     const qr = await generateQRDataURL(qrUrl);
 
@@ -176,7 +235,69 @@ router.post('/events/:id/register', authMiddleware, async (req: any, res) => {
       eventId,
       memberId: member.id,
       qrPayloadHash: hash,
+      friendlyCode,
     }});
+
+    // Send email notification with e-voucher for event registration
+    try {
+      const { sendEmail } = await import('../utils/email');
+      const emailSubject = `E-Voucher Event: ${ev.title} - The Lodge Family`;
+      
+      // Create QR code attachment
+      const qrBuffer = Buffer.from(qr.split(',')[1], 'base64');
+      const attachments = [{
+        filename: 'qr-code.png',
+        content: qrBuffer,
+        cid: 'qrcode'
+      }];
+      
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+          <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <h2 style="color: #0F4D39; text-align: center; margin-bottom: 30px;">E-Voucher Pendaftaran Event</h2>
+            
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <h3 style="color: #0F4D39; margin-top: 0;">Detail Event</h3>
+              <p><strong>Nama Event:</strong> ${ev.title}</p>
+              <p><strong>Nama Member:</strong> ${member.fullName}</p>
+              <p><strong>Kode Voucher:</strong> ${friendlyCode}</p>
+              <p><strong>Tanggal Event:</strong> ${ev.eventDate ? new Date(ev.eventDate).toLocaleDateString('id-ID') : 'TBA'}</p>
+              ${ev.location ? `<p><strong>Lokasi:</strong> ${ev.location}</p>` : ''}
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <img src="cid:qrcode" alt="QR Code Event" style="max-width: 200px; border: 1px solid #ddd; padding: 10px; background: white;">
+            </div>
+            
+            <div style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; border-left: 4px solid #0F4D39;">
+              <h4 style="color: #0F4D39; margin-top: 0;">Cara Menggunakan:</h4>
+              <ol style="margin: 0; padding-left: 20px;">
+                <li>Tunjukkan QR code ini saat check-in event</li>
+                <li>Atau berikan kode voucher: <strong>${friendlyCode}</strong></li>
+                <li>Datang tepat waktu sesuai jadwal event</li>
+              </ol>
+            </div>
+            
+            ${ev.description ? `
+            <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #ffc107;">
+              <h4 style="color: #856404; margin-top: 0;">Deskripsi Event:</h4>
+              <p style="margin: 0; color: #856404;">${ev.description}</p>
+            </div>
+            ` : ''}
+            
+            <p style="text-align: center; margin-top: 30px; color: #666; font-size: 14px;">
+              Terima kasih telah mendaftar! Kami tunggu kehadiran Anda di event ini.
+            </p>
+          </div>
+        </div>
+      `;
+      
+      await sendEmail(member.user.email, emailSubject, emailHtml, undefined, attachments);
+    } catch (emailError) {
+      console.error('Failed to send event registration email:', emailError);
+      // Don't fail the request if email fails
+    }
+
     res.json({ registration: { ...created, qr } });
   } catch (e) { console.error(e); res.status(500).json({ message: 'Server error' }); }
 });
@@ -188,10 +309,10 @@ router.get('/points/my', authMiddleware, async (req: any, res) => {
     if (!member) return res.status(404).json({ message: 'Member not found' });
     const list = await prisma.pointRedemption.findMany({ where: { memberId: member.id }, orderBy: { createdAt: 'desc' } });
     const enriched = await Promise.all(list.map(async (pr) => {
-      const { data, hash } = signPayload({ type: 'points', memberId: pr.memberId, redemptionId: pr.id });
+      const { data, hash, friendlyCode } = signPayloadWithFriendlyCode({ type: 'points', memberId: pr.memberId, redemptionId: pr.id });
       const qrUrl = `${config.appUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${pr.qrPayloadHash || hash}`;
       const qr = await generateQRDataURL(qrUrl);
-      return { ...pr, qr };
+      return { ...pr, qr, friendlyCode: pr.friendlyCode || friendlyCode };
     }));
     res.json({ redemptions: enriched });
   } catch (e) { console.error(e); res.status(500).json({ message: 'Server error' }); }
@@ -200,7 +321,10 @@ router.get('/points/my', authMiddleware, async (req: any, res) => {
 router.post('/points/redeem', authMiddleware, async (req: any, res) => {
   try {
     const userId = req.user.uid as string;
-    const member = await prisma.member.findUnique({ where: { userId } });
+    const member = await prisma.member.findUnique({ 
+      where: { userId },
+      include: { user: true }
+    });
     if (!member) return res.status(404).json({ message: 'Member not found' });
     const { rewardName, points, promoId } = req.body as { rewardName: string; points: number; promoId?: string };
     if (!rewardName || !points || points <= 0) return res.status(400).json({ message: 'Invalid payload' });
@@ -260,7 +384,7 @@ router.post('/points/redeem', authMiddleware, async (req: any, res) => {
     if (member.pointsBalance < points) return res.status(400).json({ message: 'Not enough points' });
 
     const redemptionId = uuidv4();
-    const { data, hash } = signPayload({ type: 'points', memberId: member.id, redemptionId });
+    const { data, hash, friendlyCode } = signPayloadWithFriendlyCode({ type: 'points', memberId: member.id, redemptionId });
     const qrUrl = `${config.appUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}`;
     const qr = await generateQRDataURL(qrUrl);
 
@@ -270,9 +394,72 @@ router.post('/points/redeem', authMiddleware, async (req: any, res) => {
       pointsUsed: points,
       rewardName,
       qrPayloadHash: hash,
+      friendlyCode,
       ...(promoIdToUse ? { promoId: promoIdToUse } : {}),
     }});
     await prisma.member.update({ where: { id: member.id }, data: { pointsBalance: member.pointsBalance - points } });
+
+    // Send email notification with e-voucher for point redemption
+    try {
+      const { sendEmail } = await import('../utils/email');
+      const emailSubject = `E-Voucher Redeem Points: ${rewardName} - The Lodge Family`;
+      
+      // Create QR code attachment
+      const qrBuffer = Buffer.from(qr.split(',')[1], 'base64');
+      const attachments = [{
+        filename: 'qr-code.png',
+        content: qrBuffer,
+        cid: 'qrcode'
+      }];
+      
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+          <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <h2 style="color: #0F4D39; text-align: center; margin-bottom: 30px;">E-Voucher Redeem Points</h2>
+            
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <h3 style="color: #0F4D39; margin-top: 0;">Detail Redemption</h3>
+              <p><strong>Nama Member:</strong> ${member.fullName}</p>
+              <p><strong>Reward:</strong> ${rewardName}</p>
+              <p><strong>Points Digunakan:</strong> ${points} points</p>
+              <p><strong>Kode Voucher:</strong> ${friendlyCode}</p>
+              <p><strong>Tanggal Redeem:</strong> ${new Date().toLocaleDateString('id-ID')}</p>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <img src="cid:qrcode" alt="QR Code Redemption" style="max-width: 200px; border: 1px solid #ddd; padding: 10px; background: white;">
+            </div>
+            
+            <div style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; border-left: 4px solid #0F4D39;">
+              <h4 style="color: #0F4D39; margin-top: 0;">Cara Menggunakan:</h4>
+              <ol style="margin: 0; padding-left: 20px;">
+                <li>Tunjukkan QR code ini saat mengklaim reward</li>
+                <li>Atau berikan kode voucher: <strong>${friendlyCode}</strong></li>
+                <li>Voucher berlaku sesuai syarat dan ketentuan yang berlaku</li>
+              </ol>
+            </div>
+            
+            <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #ffc107;">
+              <h4 style="color: #856404; margin-top: 0;">Informasi Penting:</h4>
+              <ul style="margin: 0; padding-left: 20px; color: #856404;">
+                <li>Simpan e-voucher ini dengan baik</li>
+                <li>Voucher tidak dapat dikembalikan atau ditukar dengan uang tunai</li>
+                <li>Hubungi customer service jika ada kendala</li>
+              </ul>
+            </div>
+            
+            <p style="text-align: center; margin-top: 30px; color: #666; font-size: 14px;">
+              Terima kasih telah menggunakan layanan redeem points kami!
+            </p>
+          </div>
+        </div>
+      `;
+      
+      await sendEmail(member.user.email, emailSubject, emailHtml, undefined, attachments);
+    } catch (emailError) {
+      console.error('Failed to send point redemption email:', emailError);
+      // Don't fail the request if email fails
+    }
 
     res.json({ redemption: { ...created, qr } });
   } catch (e) { console.error(e); res.status(500).json({ message: 'Server error' }); }
@@ -317,19 +504,21 @@ router.get('/slider-images', async (req, res) => {
     // Ambil data slider terbaru
     let list: any[] = [];
     try {
-      list = await (prisma as any).sliderImage.findMany({ orderBy: { createdAt: 'desc' } });
+      list = await (prisma as any).sliderImage.findMany({ orderBy: [{ position: 'asc' }, { createdAt: 'desc' }] });
     } catch (e1) {
       try {
         await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS SliderImage (
           id CHAR(36) NOT NULL,
           imageUrl VARCHAR(255) NOT NULL,
           title VARCHAR(191) NULL,
+          position INT NULL,
           createdAt DATETIME(3) NOT NULL,
           createdBy VARCHAR(191) NULL,
           PRIMARY KEY (id)
         )`);
       } catch {}
-      list = await prisma.$queryRawUnsafe(`SELECT id, imageUrl, title, createdAt, createdBy FROM SliderImage ORDER BY createdAt DESC`);
+      try { await prisma.$executeRawUnsafe(`ALTER TABLE SliderImage ADD COLUMN position INT NULL`); } catch {}
+      list = await prisma.$queryRawUnsafe(`SELECT id, imageUrl, title, position, createdAt, createdBy FROM SliderImage ORDER BY position ASC, createdAt DESC`);
     }
 
     const targetBase = `${req.protocol}://${req.get('host')}`;

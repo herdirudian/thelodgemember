@@ -57,6 +57,7 @@ model Ticket {
   validDate     DateTime
   status        TicketStatus @default(ACTIVE)
   qrPayloadHash String
+  friendlyCode  String?
   createdAt     DateTime @default(now())
   redeemedAt    DateTime?
   member        Member   @relation(fields: [memberId], references: [id])
@@ -69,6 +70,8 @@ model Event {
   eventDate     DateTime
   quota         Int
   imageUrl      String?
+  location      String?
+  terms         String?
   createdAt     DateTime @default(now())
   registrations EventRegistration[]
   promos        Promo[]
@@ -80,6 +83,7 @@ model EventRegistration {
   memberId      String
   status        RegistrationStatus @default(REGISTERED)
   qrPayloadHash String
+  friendlyCode  String?
   createdAt     DateTime @default(now())
   redeemedAt    DateTime?
   event         Event    @relation(fields: [eventId], references: [id])
@@ -93,6 +97,7 @@ model PointRedemption {
   rewardName    String
   status        RedemptionStatus @default(ACTIVE)
   qrPayloadHash String
+  friendlyCode  String?
   createdAt     DateTime @default(now())
   redeemedAt    DateTime?
   promoId       String?
@@ -149,6 +154,7 @@ model SliderImage {
   id        String   @id @default(uuid()) @db.Char(36)
   imageUrl  String
   title     String?
+  position  Int?
   createdAt DateTime @default(now())
   createdBy String?
 }

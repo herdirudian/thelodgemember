@@ -7,6 +7,7 @@ import authRouter from './routes/auth';
 import verifyRouter from './routes/verify';
 import memberRouter from './routes/member';
 import adminRouter from './routes/admin';
+import adminActivitiesRouter from './routes/admin-activities';
 import path from 'path';
 import fs from 'fs';
 import { PrismaClient, Role } from '@prisma/client';
@@ -49,6 +50,7 @@ app.use('/api', authRouter);
 app.use('/api', verifyRouter);
 app.use('/api', memberRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/admin', adminActivitiesRouter);
 
 // Health
 app.get('/', (_req, res) => {

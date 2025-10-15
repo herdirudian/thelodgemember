@@ -21,3 +21,38 @@ export function verifyPayload(data: string, hash: string): any | null {
     return null;
   }
 }
+
+// Generate user-friendly voucher code (format: 5dd5-7dyy-7636)
+export function generateFriendlyVoucherCode(payload: object): string {
+  // Create a hash of the payload for uniqueness
+  const payloadStr = JSON.stringify(payload);
+  const hash = crypto.createHash('sha256').update(payloadStr + config.qrHmacSecret).digest('hex');
+  
+  // Use first 12 characters of hash and format as xxxx-xxxx-xxxx
+  const code = hash.substring(0, 12);
+  return `${code.substring(0, 4)}-${code.substring(4, 8)}-${code.substring(8, 12)}`;
+}
+
+// Verify user-friendly voucher code and return payload
+export function verifyFriendlyVoucherCode(code: string, payload: object): boolean {
+  try {
+    // Remove dashes and normalize
+    const normalizedCode = code.replace(/-/g, '').toLowerCase();
+    if (normalizedCode.length !== 12) return false;
+    
+    // Generate expected code for this payload
+    const expectedCode = generateFriendlyVoucherCode(payload);
+    const expectedNormalized = expectedCode.replace(/-/g, '').toLowerCase();
+    
+    return normalizedCode === expectedNormalized;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Enhanced payload signing that includes friendly code
+export function signPayloadWithFriendlyCode(payload: object): { data: string; hash: string; friendlyCode: string } {
+  const result = signPayload(payload);
+  const friendlyCode = generateFriendlyVoucherCode(payload);
+  return { ...result, friendlyCode };
+}
