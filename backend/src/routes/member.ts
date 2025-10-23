@@ -7,6 +7,7 @@ import { signPayload, signPayloadWithFriendlyCode } from '../utils/security';
 import { generateQRDataURL } from '../utils/qr';
 import { v4 as uuidv4 } from 'uuid';
 import { createMembershipCardPDF } from '../utils/pdf';
+import { generateMembershipNumber } from '../utils/membershipNumber';
 import path from 'path';
 
 const prisma = new PrismaClient();
@@ -33,6 +34,7 @@ router.get('/me', authMiddleware, async (req: any, res) => {
   if (user && !user.member && user.role === 'MEMBER') {
     const fullName = (user.fullName && user.fullName.trim().length > 0) ? user.fullName : (user.email?.split('@')[0] || 'Member');
     const phone = '0000000000';
+    const membershipNumber = await generateMembershipNumber();
     const payload = { type: 'member', memberId: user.id };
     const { data, hash } = signPayload(payload);
     const qrUrl = `${config.appUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}`;
@@ -41,6 +43,7 @@ router.get('/me', authMiddleware, async (req: any, res) => {
       userId: user.id,
       fullName,
       phone,
+      membershipNumber,
       qrPayloadHash: hash,
     }});
     // Generate membership card PDF
@@ -345,7 +348,7 @@ router.post('/points/redeem', authMiddleware, async (req: any, res) => {
       if (maxRedeem > 0) {
         const usedCount = await prisma.pointRedemption.count({
           where: {
-            memberId: member.id,
+            memberId: member!.id,
             OR: [
               { promoId: id },
               { rewardName: promo.title, pointsUsed: required },
@@ -540,6 +543,202 @@ router.get('/slider-images', async (req, res) => {
   } catch (e: any) {
     console.error('Member slider images error:', e);
     res.status(500).json({ message: e?.message || 'Server error' });
+  }
+});
+
+// Public endpoint for tourism tickets
+router.get('/tourism-tickets', async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = '', category = '' } = req.query;
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const where: any = {
+      isActive: true
+    };
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search as string, mode: 'insensitive' } },
+        { location: { contains: search as string, mode: 'insensitive' } }
+      ];
+    }
+
+    if (category) {
+      where.category = category;
+    }
+
+    const [tickets, total] = await Promise.all([
+      prisma.tourismTicket.findMany({
+        where,
+        skip,
+        take: Number(limit),
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.tourismTicket.count({ where })
+    ]);
+
+    const targetBase = `${req.protocol}://${req.get('host')}`;
+    const enrichedTickets = tickets.map((ticket: any) => {
+      let fixedImageUrl = ticket.imageUrl as string | undefined;
+      try {
+        if (fixedImageUrl && fixedImageUrl.includes('/files/uploads/')) {
+          const u = new URL(fixedImageUrl);
+          const currentBase = `${u.protocol}//${u.host}`;
+          if (currentBase !== targetBase) {
+            fixedImageUrl = fixedImageUrl.replace(currentBase, targetBase);
+          }
+        }
+      } catch {}
+      return { ...ticket, imageUrl: fixedImageUrl };
+    });
+
+    res.json({
+      tickets: enrichedTickets,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        totalPages: Math.ceil(total / Number(limit))
+      }
+    });
+  } catch (error: any) {
+    console.error('Get tourism tickets error:', error);
+    res.status(500).json({ message: error?.message || 'Server error' });
+  }
+});
+
+// Public endpoint for individual tourism ticket
+router.get('/tourism-tickets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const ticket = await prisma.tourismTicket.findUnique({
+      where: { 
+        id,
+        isActive: true 
+      }
+    });
+
+    if (!ticket) {
+      return res.status(404).json({ message: 'Tiket tidak ditemukan' });
+    }
+
+    const targetBase = `${req.protocol}://${req.get('host')}`;
+    let fixedImageUrl = ticket.imageUrl as string | undefined;
+    try {
+      if (fixedImageUrl && fixedImageUrl.includes('/files/uploads/')) {
+        const u = new URL(fixedImageUrl);
+        const currentBase = `${u.protocol}//${u.host}`;
+        if (currentBase !== targetBase) {
+          fixedImageUrl = fixedImageUrl.replace(currentBase, targetBase);
+        }
+      }
+    } catch {}
+
+    res.json({
+      ticket: { ...ticket, imageUrl: fixedImageUrl }
+    });
+  } catch (error: any) {
+    console.error('Get tourism ticket error:', error);
+    res.status(500).json({ message: error?.message || 'Server error' });
+  }
+});
+
+// Public endpoint for accommodations
+router.get('/accommodations', async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = '', type = '' } = req.query;
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const where: any = {
+      isActive: true
+    };
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search as string, mode: 'insensitive' } },
+        { location: { contains: search as string, mode: 'insensitive' } }
+      ];
+    }
+
+    if (type) {
+      where.type = type;
+    }
+
+    const [accommodations, total] = await Promise.all([
+      prisma.accommodation.findMany({
+        where,
+        skip,
+        take: Number(limit),
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.accommodation.count({ where })
+    ]);
+
+    const targetBase = `${req.protocol}://${req.get('host')}`;
+    const enrichedAccommodations = accommodations.map((accommodation: any) => {
+      let fixedImageUrl = accommodation.imageUrl as string | undefined;
+      try {
+        if (fixedImageUrl && fixedImageUrl.includes('/files/uploads/')) {
+          const u = new URL(fixedImageUrl);
+          const currentBase = `${u.protocol}//${u.host}`;
+          if (currentBase !== targetBase) {
+            fixedImageUrl = fixedImageUrl.replace(currentBase, targetBase);
+          }
+        }
+      } catch {}
+      return { ...accommodation, imageUrl: fixedImageUrl };
+    });
+
+    res.json({
+      accommodations: enrichedAccommodations,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        totalPages: Math.ceil(total / Number(limit))
+      }
+    });
+  } catch (error: any) {
+    console.error('Get accommodations error:', error);
+    res.status(500).json({ message: error?.message || 'Server error' });
+  }
+});
+
+// Public endpoint for individual accommodation
+router.get('/accommodations/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const accommodation = await prisma.accommodation.findUnique({
+      where: { 
+        id,
+        isActive: true 
+      }
+    });
+
+    if (!accommodation) {
+      return res.status(404).json({ message: 'Akomodasi tidak ditemukan' });
+    }
+
+    const targetBase = `${req.protocol}://${req.get('host')}`;
+    let fixedImageUrl = accommodation.imageUrl as string | undefined;
+    try {
+      if (fixedImageUrl && fixedImageUrl.includes('/files/uploads/')) {
+        const u = new URL(fixedImageUrl);
+        const currentBase = `${u.protocol}//${u.host}`;
+        if (currentBase !== targetBase) {
+          fixedImageUrl = fixedImageUrl.replace(currentBase, targetBase);
+        }
+      }
+    } catch {}
+
+    res.json({
+      accommodation: { ...accommodation, imageUrl: fixedImageUrl }
+    });
+  } catch (error: any) {
+    console.error('Get accommodation error:', error);
+    res.status(500).json({ message: error?.message || 'Server error' });
   }
 });
 

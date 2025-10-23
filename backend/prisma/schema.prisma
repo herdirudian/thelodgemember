@@ -29,6 +29,9 @@ model Member {
   userId             String   @unique
   fullName           String
   phone              String
+  dateOfBirth        DateTime?
+  address            String?
+  membershipNumber   String?  @unique // Format pendek seperti TLG08899
   registrationDate   DateTime @default(now())
   isLifetime         Boolean  @default(true)
   pointsBalance      Int      @default(0)
@@ -38,6 +41,8 @@ model Member {
   eventRegistrations EventRegistration[]
   pointRedemptions   PointRedemption[]
   pointAdjustments   PointAdjustment[]
+  tourismTicketBookings TourismTicketBooking[]
+  accommodationBookings AccommodationBooking[]
   user               User     @relation(fields: [userId], references: [id])
 }
 
@@ -46,6 +51,8 @@ model RegistrationCode {
   code      String   @unique
   isActive  Boolean  @default(true)
   expiresAt DateTime?
+  quota     Int?     // Maximum number of users that can use this code
+  usedCount Int      @default(0) // Number of times this code has been used
   createdBy String
   createdAt DateTime @default(now())
 }
@@ -151,12 +158,15 @@ model Promo {
   pointRedemptions PointRedemption[]
 }
 model SliderImage {
-  id        String   @id @default(uuid()) @db.Char(36)
-  imageUrl  String
-  title     String?
-  position  Int?
-  createdAt DateTime @default(now())
-  createdBy String?
+  id          String   @id @default(uuid()) @db.Char(36)
+  imageUrl    String
+  title       String?
+  description String?
+  linkUrl     String?
+  position    Int?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  createdBy   String?
 }
 
 enum Role {
@@ -210,6 +220,7 @@ enum VoucherType {
   TICKET
   POINTS
   EVENT
+  TOURISM_TICKET
 }
 
 enum PromoType {
@@ -235,6 +246,141 @@ model AdminActivity {
   createdAt   DateTime   @default(now())
 }
 
+model TourismTicket {
+  id          String   @id @default(uuid()) @db.Char(36)
+  name        String
+  description String
+  validDate   DateTime
+  expiryDate  DateTime
+  allotment   Int
+  price       Float
+  discount    Float    @default(0)
+  finalPrice  Float
+  imageUrl    String?
+  category    String
+  location    String
+  duration    String
+  includes    String
+  terms       String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  bookings    TourismTicketBooking[]
+}
+
+model Accommodation {
+  id           String   @id @default(uuid()) @db.Char(36)
+  name         String
+  description  String
+  type         String
+  location     String
+  pricePerNight Float
+  discount     Float    @default(0)
+  maxGuests    Int
+  totalRooms   Int
+  amenities    String
+  policies     String
+  imageUrl     String?
+  rating       Float    @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  bookings     AccommodationBooking[]
+}
+
+// Payment and Booking Models
+model TourismTicketBooking {
+  id              String        @id @default(uuid()) @db.Char(36)
+  ticketId        String
+  memberId        String?       // Optional for guest bookings
+  customerName    String
+  customerEmail   String
+  customerPhone   String
+  quantity        Int
+  totalAmount     Float
+  bookingDate     DateTime
+  visitDate       DateTime
+  status          BookingStatus @default(PENDING)
+  paymentId       String?       @unique
+  notes           String?
+  qrPayloadHash   String?       // QR code payload hash for redemption
+  friendlyCode    String?       // User-friendly voucher code
+  redeemedAt      DateTime?     // When the ticket was redeemed
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  ticket          TourismTicket @relation(fields: [ticketId], references: [id])
+  member          Member?       @relation(fields: [memberId], references: [id])
+  payment         Payment?      @relation(fields: [paymentId], references: [id])
+}
+
+model AccommodationBooking {
+  id              String        @id @default(uuid()) @db.Char(36)
+  accommodationId String
+  memberId        String?       // Optional for guest bookings
+  customerName    String
+  customerEmail   String
+  customerPhone   String
+  checkInDate     DateTime
+  checkOutDate    DateTime
+  guests          Int
+  rooms           Int
+  totalAmount     Float
+  status          BookingStatus @default(PENDING)
+  paymentId       String?       @unique
+  specialRequests String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  accommodation   Accommodation @relation(fields: [accommodationId], references: [id])
+  member          Member?       @relation(fields: [memberId], references: [id])
+  payment         Payment?      @relation(fields: [paymentId], references: [id])
+}
+
+model Payment {
+  id                    String        @id @default(uuid()) @db.Char(36)
+  xenditInvoiceId       String?       @unique
+  xenditPaymentId       String?       @unique
+  amount                Float
+  currency              String        @default("IDR")
+  status                PaymentStatus @default(PENDING)
+  paymentMethod         String?
+  paymentChannel        String?
+  description           String?
+  customerName          String
+  customerEmail         String
+  customerPhone         String?
+  externalId            String        @unique
+  invoiceUrl            String?
+  paidAt                DateTime?
+  expiredAt             DateTime?
+  failureCode           String?
+  failureMessage        String?
+  webhookData           String?       // JSON string for storing webhook payload
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  
+  tourismTicketBooking  TourismTicketBooking?
+  accommodationBooking  AccommodationBooking?
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  PAID
+  CANCELLED
+  COMPLETED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  EXPIRED
+  FAILED
+  CANCELLED
+}
+
 model Settings {
   id                String   @id @default(uuid()) @db.Char(36)
   // General
@@ -257,6 +403,11 @@ model Settings {
   cloudinaryEnabled Boolean  @default(false)
   cloudinaryFolder  String?
   webhookUrl        String?
+  // Payment Gateway (Xendit)
+  xenditSecretKey   String?
+  xenditPublicKey   String?
+  xenditWebhookToken String?
+  xenditEnvironment String   @default("test") // "test" or "live"
   // Maintenance
   maintenanceMode   Boolean  @default(false)
   announcement      String?

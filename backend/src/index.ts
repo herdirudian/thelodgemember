@@ -8,6 +8,8 @@ import verifyRouter from './routes/verify';
 import memberRouter from './routes/member';
 import adminRouter from './routes/admin';
 import adminActivitiesRouter from './routes/admin-activities';
+import bookingRouter from './routes/booking';
+import webhookRouter from './routes/webhook';
 import path from 'path';
 import fs from 'fs';
 import { PrismaClient, Role } from '@prisma/client';
@@ -48,9 +50,11 @@ app.use(morgan('dev'));
 // Routes
 app.use('/api', authRouter);
 app.use('/api', verifyRouter);
-app.use('/api', memberRouter);
+app.use('/api/member', memberRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/admin', adminActivitiesRouter);
+app.use('/api/booking', bookingRouter);
+app.use('/api/webhook', webhookRouter);
 
 // Health
 app.get('/', (_req, res) => {
@@ -176,6 +180,10 @@ async function seedInitialData() {
           webhookUrl: null,
           maintenanceMode: false,
           announcement: null,
+          xenditSecretKey: process.env.XENDIT_SECRET_KEY || null,
+          xenditPublicKey: process.env.XENDIT_PUBLIC_KEY || null,
+          xenditWebhookToken: process.env.XENDIT_WEBHOOK_TOKEN || null,
+          xenditEnvironment: 'test',
         } });
         console.log('Seeded default Settings via Prisma');
       } catch {
@@ -200,6 +208,10 @@ async function seedInitialData() {
             webhookUrl VARCHAR(255) NULL,
             maintenanceMode BOOLEAN NOT NULL DEFAULT false,
             announcement TEXT NULL,
+            xenditSecretKey VARCHAR(191) NULL,
+            xenditPublicKey VARCHAR(191) NULL,
+            xenditWebhookToken VARCHAR(191) NULL,
+            xenditEnvironment VARCHAR(191) NOT NULL DEFAULT 'test',
             createdAt DATETIME(3) NOT NULL,
             updatedAt DATETIME(3) NOT NULL,
             PRIMARY KEY (id)
@@ -208,7 +220,7 @@ async function seedInitialData() {
           if (!Array.isArray(rows) || rows.length === 0) {
             const now = new Date();
             const id = crypto.randomUUID ? crypto.randomUUID() : require('uuid').v4();
-            await prisma.$executeRaw`INSERT INTO Settings (id, appName, defaultLocale, timeZone, primaryColor, darkMode, logoUrl, require2FA, sessionTimeout, allowDirectLogin, fromName, fromEmail, emailProvider, cloudinaryEnabled, cloudinaryFolder, webhookUrl, maintenanceMode, announcement, createdAt, updatedAt) VALUES (${id}, 'The Lodge Family', 'id-ID', 'Asia/Jakarta', '#0F4D39', true, ${null}, false, 60, true, ${null}, ${null}, 'smtp', false, ${null}, ${null}, false, ${null}, ${now}, ${now})`;
+            await prisma.$executeRaw`INSERT INTO Settings (id, appName, defaultLocale, timeZone, primaryColor, darkMode, logoUrl, require2FA, sessionTimeout, allowDirectLogin, fromName, fromEmail, emailProvider, cloudinaryEnabled, cloudinaryFolder, webhookUrl, maintenanceMode, announcement, xenditSecretKey, xenditPublicKey, xenditWebhookToken, xenditEnvironment, createdAt, updatedAt) VALUES (${id}, 'The Lodge Family', 'id-ID', 'Asia/Jakarta', '#0F4D39', true, ${null}, false, 60, true, ${null}, ${null}, 'smtp', false, ${null}, ${null}, false, ${null}, ${process.env.XENDIT_SECRET_KEY || null}, ${process.env.XENDIT_PUBLIC_KEY || null}, ${process.env.XENDIT_WEBHOOK_TOKEN || null}, 'test', ${now}, ${now})`;
             console.log('Seeded default Settings via raw SQL');
           }
         } catch (err) {

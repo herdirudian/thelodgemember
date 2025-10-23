@@ -1,4 +1,4 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import { PrismaClient, RedemptionStatus, RegistrationStatus, TicketStatus, PromoType } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
@@ -52,10 +52,6 @@ async function recordAdminActivity(info: { adminId: string; adminName?: string |
   try {
     // Prefer prisma client
     await (prisma as any).adminActivity.create({ data: payload });
-  } catch (e: any) {
-    console.error('Failed to record admin activity:', e);
-  }
-}
 
 // Redeem voucher by code endpoint
 router.post('/redeem-by-code', adminAuth, async (req, res) => {
@@ -418,6 +414,34 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
     res.status(500).json({ message: e?.message || 'Server error' });
   }
 });
+  } catch (err) {
+    // Fallback raw SQL for MySQL
+    try {
+      const id = uuidv4();
+      // Pastikan tabel tersedia
+      try {
+        await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS AdminActivity (
+          id CHAR(36) NOT NULL,
+          adminId VARCHAR(191) NOT NULL,
+          adminName VARCHAR(191) NULL,
+          adminRole ENUM('CASHIER','MODERATOR','OWNER','SUPER_ADMIN') NULL,
+          method VARCHAR(16) NOT NULL,
+          path VARCHAR(255) NOT NULL,
+          status INT NOT NULL,
+          ip VARCHAR(64) NULL,
+          userAgent VARCHAR(255) NULL,
+          requestBody TEXT NULL,
+          query TEXT NULL,
+          createdAt DATETIME(3) NOT NULL,
+          PRIMARY KEY (id)
+        )`);
+      } catch {}
+      await prisma.$executeRaw`INSERT INTO AdminActivity (id, adminId, adminName, adminRole, method, path, status, ip, userAgent, requestBody, query, createdAt) VALUES (${id}, ${payload.adminId}, ${payload.adminName}, ${payload.adminRole}, ${payload.method}, ${payload.path}, ${payload.status}, ${payload.ip}, ${payload.userAgent}, ${payload.requestBody}, ${payload.query}, ${payload.createdAt})`;
+    } catch (e2) {
+      console.error('Failed to record admin activity:', e2);
+    }
+  }
+}
 
 async function adminAuth(req: any, res: any, next: any) {
   const hdr = req.headers.authorization || '';
@@ -2914,6 +2938,282 @@ router.post('/slider-images/:id/reorder', adminAuth, async (req, res) => {
       success: false,
       message: 'Gagal mengubah posisi slider'
     });
+  }
+});
+
+// Redeem voucher by code endpoint (DUPLICATE - DISABLED)
+// router.post('/redeem-by-code', adminAuth, async (req, res) => {
+  // const { voucherCode } = req.body as { voucherCode: string };
+  
+  if (!voucherCode || !voucherCode.trim()) {
+    return res.status(400).json({ message: 'Kode voucher diperlukan' });
+  }
+
+  try {
+    // Ambil info admin untuk pencatatan
+    const adminUser = await prisma.user.findUnique({ where: { id: req.user?.uid } });
+    const adminId = adminUser?.id || req.user?.uid || 'unknown';
+    const adminName = adminUser?.email || 'admin';
+
+    const code = voucherCode.trim().toUpperCase();
+    let voucherFound = false;
+    let result: any = null;
+
+    // Siapkan variabel umum untuk RedeemHistory
+    let memberId = '';
+    let memberName = '';
+    let voucherType: VoucherType = 'TICKET' as any;
+    let voucherId = '';
+    let voucherLabel: string | undefined = undefined;
+    const redeemedAt = new Date();
+
+    // Cek apakah ini kode tiket
+    const ticket = await prisma.ticket.findFirst({ 
+      where: { 
+        OR: [
+          { friendlyCode: code },
+          { id: code }
+        ]
+      },
+      include: { member: true }
+    });
+
+    if (ticket) {
+      if (ticket.status === 'REDEEMED') {
+        return res.status(400).json({ message: 'Tiket sudah pernah di-redeem' });
+      }
+
+      const updated = await prisma.ticket.update({ 
+        where: { id: ticket.id }, 
+        data: { status: 'REDEEMED', redeemedAt } 
+      });
+
+      memberId = ticket.memberId;
+      memberName = ticket.member?.fullName || '';
+      voucherType = 'TICKET' as any;
+      voucherId = ticket.id;
+      voucherLabel = ticket.name;
+
+      // Generate proof
+      const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
+      const qrCode = `REDEEM-${ticket.id}`;
+      const qrDataURL = await generateQRDataURL(qrCode);
+      
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'redeem-proofs');
+      try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
+      const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
+      const outputPath = path.join(uploadsDir, filename);
+      
+      createRedeemProofPDF({ 
+        outputPath, 
+        memberName, 
+        voucherType: 'Tiket Gratis Member', 
+        voucherLabel, 
+        redeemedAt, 
+        qrDataUrl: qrDataURL, 
+        adminName, 
+        companyName: 'The Lodge Family' 
+      });
+      
+      const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
+      
+      await prisma.redeemHistory.create({ 
+        data: { 
+          memberId, 
+          memberName, 
+          voucherType, 
+          voucherId, 
+          voucherLabel, 
+          redeemedAt, 
+          adminId, 
+          adminName, 
+          proofUrl 
+        } 
+      });
+
+      result = {
+        success: true,
+        memberName,
+        memberId,
+        voucherName: voucherLabel,
+        voucherType: 'Tiket',
+        qrCode,
+        proofUrl,
+        details: updated
+      };
+      voucherFound = true;
+    }
+
+    // Jika belum ditemukan, cek point redemption
+    if (!voucherFound) {
+      const pointRedemption = await prisma.pointRedemption.findFirst({ 
+        where: { 
+          OR: [
+            { friendlyCode: code },
+            { id: code }
+          ]
+        },
+        include: { member: true }
+      });
+
+      if (pointRedemption) {
+        if (pointRedemption.status === 'REDEEMED') {
+          return res.status(400).json({ message: 'Redeem poin sudah pernah di-redeem' });
+        }
+
+        const updated = await prisma.pointRedemption.update({ 
+          where: { id: pointRedemption.id }, 
+          data: { status: 'REDEEMED', redeemedAt } 
+        });
+
+        memberId = pointRedemption.memberId;
+        memberName = pointRedemption.member?.fullName || '';
+        voucherType = 'POINTS' as any;
+        voucherId = pointRedemption.id;
+        voucherLabel = pointRedemption.rewardName;
+
+        // Generate proof
+        const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
+        const qrCode = `REDEEM-${pointRedemption.id}`;
+        const qrDataURL = await generateQRDataURL(qrCode);
+        
+        const uploadsDir = path.join(process.cwd(), 'uploads', 'redeem-proofs');
+        try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
+        const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
+        const outputPath = path.join(uploadsDir, filename);
+        
+        createRedeemProofPDF({ 
+          outputPath, 
+          memberName, 
+          voucherType: 'Redeem Poin', 
+          voucherLabel, 
+          redeemedAt, 
+          qrDataUrl: qrDataURL, 
+          adminName, 
+          companyName: 'The Lodge Family' 
+        });
+        
+        const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
+        
+        await prisma.redeemHistory.create({ 
+          data: { 
+            memberId, 
+            memberName, 
+            voucherType, 
+            voucherId, 
+            voucherLabel, 
+            redeemedAt, 
+            adminId, 
+            adminName, 
+            proofUrl 
+          } 
+        });
+
+        result = {
+          success: true,
+          memberName,
+          memberId,
+          voucherName: voucherLabel,
+          voucherType: 'Poin',
+          qrCode,
+          proofUrl,
+          details: updated
+        };
+        voucherFound = true;
+      }
+    }
+
+    // Jika belum ditemukan, cek event registration
+    if (!voucherFound) {
+      const eventReg = await prisma.eventRegistration.findFirst({ 
+        where: { 
+          OR: [
+            { friendlyCode: code },
+            { id: code }
+          ]
+        },
+        include: { 
+          member: true,
+          event: true
+        }
+      });
+
+      if (eventReg) {
+        if (eventReg.status === 'REDEEMED') {
+          return res.status(400).json({ message: 'Registrasi event sudah pernah di-redeem' });
+        }
+
+        const updated = await prisma.eventRegistration.update({ 
+          where: { id: eventReg.id }, 
+          data: { status: 'REDEEMED', redeemedAt } 
+        });
+
+        memberId = eventReg.memberId;
+        memberName = eventReg.member?.fullName || '';
+        voucherType = 'EVENT' as any;
+        voucherId = eventReg.id;
+        voucherLabel = eventReg.event?.title;
+
+        // Generate proof
+        const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
+        const qrCode = `REDEEM-${eventReg.id}`;
+        const qrDataURL = await generateQRDataURL(qrCode);
+        
+        const uploadsDir = path.join(process.cwd(), 'uploads', 'redeem-proofs');
+        try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
+        const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
+        const outputPath = path.join(uploadsDir, filename);
+        
+        createRedeemProofPDF({ 
+          outputPath, 
+          memberName, 
+          voucherType: 'Event Eksklusif Member', 
+          voucherLabel, 
+          redeemedAt, 
+          qrDataUrl: qrDataURL, 
+          adminName, 
+          companyName: 'The Lodge Family' 
+        });
+        
+        const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
+        
+        await prisma.redeemHistory.create({ 
+          data: { 
+            memberId, 
+            memberName, 
+            voucherType, 
+            voucherId, 
+            voucherLabel, 
+            redeemedAt, 
+            adminId, 
+            adminName, 
+            proofUrl 
+          } 
+        });
+
+        result = {
+          success: true,
+          memberName,
+          memberId,
+          voucherName: voucherLabel,
+          voucherType: 'Event',
+          qrCode,
+          proofUrl,
+          details: updated
+        };
+        voucherFound = true;
+      }
+    }
+
+    if (!voucherFound) {
+      return res.status(404).json({ message: 'Kode voucher tidak ditemukan atau tidak valid' });
+    }
+
+    return res.json(result);
+
+  } catch (e: any) {
+    console.error('Redeem by code error:', e);
+    res.status(500).json({ message: e?.message || 'Server error' });
   }
 });
 
