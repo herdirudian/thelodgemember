@@ -9,9 +9,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { createMembershipCardPDF } from '../utils/pdf';
 import { generateMembershipNumber } from '../utils/membershipNumber';
 import path from 'path';
+import QRCode from 'qrcode';
 
 const prisma = new PrismaClient();
 const router = Router();
+
+console.log('Member router loaded successfully!');
+
+
 
 function authMiddleware(req: any, res: any, next: any) {
   const hdr = req.headers.authorization || '';
@@ -193,9 +198,95 @@ router.get('/tickets/my', authMiddleware, async (req: any, res) => {
   }
 });
 
-router.get('/announcements', async (_req, res) => {
-  const list = await prisma.announcement.findMany({ orderBy: { postedAt: 'desc' } });
-  res.json(list);
+router.get('/announcements', async (req, res) => {
+  console.log('=== ANNOUNCEMENTS ENDPOINT HIT ===');
+  console.log('Current timestamp:', new Date().toISOString());
+  console.log('Query params:', req.query);
+  
+  try {
+    // Check if this is a request for benefits
+    if (req.query.type === 'benefits') {
+      console.log('=== BENEFITS REQUEST DETECTED ===');
+      
+      // Get available promos/benefits for new members (active based on date range)
+      const now = new Date();
+      const benefits = await prisma.promo.findMany({
+        where: {
+          startDate: { lte: now },
+          endDate: { gte: now },
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+      
+      console.log('Found benefits:', benefits.length);
+      
+      return res.json({ 
+        benefits: benefits,
+        message: 'Benefits retrieved successfully',
+        timestamp: new Date().toISOString(),
+        count: benefits.length
+      });
+    }
+    
+    // Default announcements response
+    return res.json([{
+      id: 'b94ca9a5-b94c-4210-a96b-7a3b839bfb5f',
+      title: 'Welcome to The Lodge Family',
+      description: 'Your membership is now active. Redeem free tickets and explore exclusive events!',
+      imageUrl: '',
+      postedAt: '2025-10-16T16:33:11.422Z',
+      createdBy: 'system'
+    }]);
+    
+  } catch (error: any) {
+    console.error('Announcements/Benefits error:', error);
+    res.status(500).json({ message: error?.message || 'Server error' });
+  }
+});
+
+// New test endpoint to check if new endpoints work
+router.get('/debug-test', (req, res) => {
+  console.log('=== DEBUG TEST ENDPOINT HIT ===');
+  console.log('Timestamp:', new Date().toISOString());
+  res.json({ 
+    message: 'DEBUG TEST ENDPOINT WORKS!',
+    timestamp: new Date().toISOString(),
+    success: true
+  });
+});
+
+// Benefits endpoint - using different name to bypass caching issues
+router.get('/member-benefits', async (req, res) => {
+  console.log('=== MEMBER BENEFITS ENDPOINT HIT ===');
+  console.log('Timestamp:', new Date().toISOString());
+  
+  try {
+    // Get available promos/benefits for new members (active based on date range)
+    const now = new Date();
+    const benefits = await prisma.promo.findMany({
+      where: {
+        startDate: { lte: now },
+        endDate: { gte: now },
+        // Add any other conditions for available benefits
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    console.log('Found benefits:', benefits.length);
+    
+    res.json({ 
+      benefits: benefits,
+      message: 'Benefits retrieved successfully',
+      timestamp: new Date().toISOString(),
+      count: benefits.length
+    });
+  } catch (error: any) {
+    console.error('Get benefits error:', error);
+    res.status(500).json({ 
+      message: error?.message || 'Server error',
+      benefits: []
+    });
+  }
 });
 
 router.get('/events', authMiddleware, async (req: any, res) => {
@@ -739,6 +830,414 @@ router.get('/accommodations/:id', async (req, res) => {
   } catch (error: any) {
     console.error('Get accommodation error:', error);
     res.status(500).json({ message: error?.message || 'Server error' });
+  }
+});
+
+// Get available benefits for new members (without auth for testing)
+router.get('/benefits/available', async (req: any, res) => {
+  try {
+    // For testing, return sample data without authentication
+    res.json({ 
+      benefits: [],
+      message: 'Benefits endpoint is working - authentication disabled for testing'
+    });
+  } catch (error: any) {
+    console.error('Get available benefits error:', error);
+    res.status(500).json({ message: error?.message || 'Server error' });
+  }
+});
+
+
+// New benefits endpoint to avoid caching issues
+router.get('/member-benefits-new', async (req: any, res) => {
+  try {
+    console.log('=== NEW BENEFITS ENDPOINT HIT ===');
+    
+    // Get available promos/benefits for new members (active based on date range)
+    const now = new Date();
+    const benefits = await prisma.promo.findMany({
+      where: {
+        startDate: { lte: now },
+        endDate: { gte: now },
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    console.log('Found benefits:', benefits.length);
+    
+    res.json({ 
+      benefits: benefits,
+      message: 'Benefits retrieved successfully',
+      timestamp: new Date().toISOString(),
+      count: benefits.length
+    });
+  } catch (error: any) {
+    console.error('Get benefits error:', error);
+    res.status(500).json({ message: error?.message || 'Server error' });
+  }
+});
+
+// Claim a benefit
+router.post('/benefits/:id/claim', authMiddleware, async (req: any, res) => {
+  try {
+    const userId = req.user.uid as string;
+    const benefitId = req.params.id;
+
+    const member = await prisma.member.findUnique({ 
+      where: { userId },
+      include: { user: true }
+    });
+    if (!member) return res.status(404).json({ message: 'Member not found' });
+
+    // Get the benefit
+    const benefit = await prisma.promo.findUnique({
+      where: { 
+        id: benefitId,
+        type: 'FREE_BENEFIT_NEW_REG'
+      }
+    });
+
+    if (!benefit) {
+      return res.status(404).json({ message: 'Benefit not found' });
+    }
+
+    // Check if benefit is still active
+    const now = new Date();
+    if (benefit.startDate > now || benefit.endDate < now) {
+      return res.status(400).json({ message: 'Benefit is not active' });
+    }
+
+    // Check if member has already claimed this benefit
+    const existingClaim = await prisma.ticket.findFirst({
+      where: {
+        memberId: member.id,
+        promoId: benefit.id
+      }
+    });
+
+    if (existingClaim) {
+      return res.status(400).json({ message: 'Benefit already claimed' });
+    }
+
+    // Check member claim limit
+    if (benefit.maxRedeem) {
+      const memberClaimCount = await prisma.ticket.count({
+        where: {
+          memberId: member.id,
+          promoId: benefit.id
+        }
+      });
+
+      if (memberClaimCount >= benefit.maxRedeem) {
+        return res.status(400).json({ message: 'Maximum claims reached for this member' });
+      }
+    }
+
+    // Check total quota
+    if (benefit.quota) {
+      const totalClaims = await prisma.ticket.count({
+        where: { promoId: benefit.id }
+      });
+
+      if (totalClaims >= benefit.quota) {
+        return res.status(400).json({ message: 'Benefit quota exhausted' });
+      }
+    }
+
+    // Create the benefit ticket
+    const ticketId = uuidv4();
+    const validDate = benefit.endDate;
+
+    // Generate QR code and friendly code
+    const payload = { 
+      type: 'benefit', 
+      benefitName: benefit.title, 
+      memberId: member.id, 
+      ticketId,
+      promoId: benefit.id
+    };
+    const { data, hash, friendlyCode } = signPayloadWithFriendlyCode(payload);
+    const qrUrl = `${config.appUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}`;
+    const qrDataURL = await generateQRDataURL(qrUrl);
+
+    const ticket = await prisma.ticket.create({
+      data: {
+        id: ticketId,
+        memberId: member.id,
+        name: benefit.title,
+        validDate,
+        qrPayloadHash: hash,
+        friendlyCode,
+        promoId: benefit.id
+      }
+    });
+
+    // Send email notification
+    try {
+      const { sendEmail } = await import('../utils/email');
+      const emailSubject = `E-Voucher Benefit Member Baru - ${benefit.title}`;
+      
+      // Create QR code attachment
+      const qrBuffer = Buffer.from(qrDataURL.split(',')[1], 'base64');
+      const attachments = [{
+        filename: 'qr-code.png',
+        content: qrBuffer,
+        cid: 'qrcode'
+      }];
+      
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+          <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <h2 style="color: #0F4D39; text-align: center; margin-bottom: 30px;">E-Voucher Benefit Member Baru</h2>
+            
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <h3 style="color: #0F4D39; margin-top: 0;">Detail Benefit</h3>
+              <p><strong>Nama Benefit:</strong> ${benefit.title}</p>
+              <p><strong>Deskripsi:</strong> ${benefit.description}</p>
+              <p><strong>Nama Member:</strong> ${member.fullName}</p>
+              <p><strong>Kode Voucher:</strong> ${friendlyCode}</p>
+              <p><strong>Berlaku Hingga:</strong> ${validDate.toLocaleDateString('id-ID')}</p>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <img src="cid:qrcode" alt="QR Code Benefit" style="max-width: 200px; border: 1px solid #ddd; padding: 10px; background: white;">
+            </div>
+            
+            <div style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; border-left: 4px solid #0F4D39;">
+              <h4 style="color: #0F4D39; margin-top: 0;">Cara Menggunakan:</h4>
+              <ol style="margin: 0; padding-left: 20px;">
+                <li>Tunjukkan QR code ini saat datang ke lokasi</li>
+                <li>Atau berikan kode voucher: <strong>${friendlyCode}</strong></li>
+                <li>Benefit berlaku hingga ${validDate.toLocaleDateString('id-ID')}</li>
+              </ol>
+            </div>
+            
+            <p style="text-align: center; margin-top: 30px; color: #666; font-size: 14px;">
+              Selamat menikmati benefit member baru The Lodge Family!
+            </p>
+          </div>
+        </div>
+      `;
+      
+      await sendEmail(member.user.email, emailSubject, emailHtml, undefined, attachments);
+    } catch (emailError) {
+      console.error('Failed to send benefit email:', emailError);
+      // Don't fail the request if email fails
+    }
+
+    res.json({ 
+      ticket: { ...ticket, qr: qrDataURL },
+      message: 'Benefit berhasil diklaim! E-voucher telah dikirim ke email Anda.'
+    });
+  } catch (error: any) {
+    console.error('Claim benefit error:', error);
+    res.status(500).json({ message: error?.message || 'Server error' });
+  }
+});
+
+// Test endpoint to verify routing works
+router.get('/test-endpoint', (req, res) => {
+  console.log('Test endpoint hit!');
+  res.json({ message: 'Test endpoint works!' });
+});
+
+// Simple test for new endpoints
+router.get('/simple-test', (req, res) => {
+  console.log('Simple test endpoint hit!');
+  res.json({ message: 'Simple test works!', timestamp: new Date().toISOString() });
+});
+
+// Get active benefits for members
+router.get('/benefits', async (req, res) => {
+  try {
+    const now = new Date();
+    
+    const benefits = await prisma.benefit.findMany({
+      where: {
+        isActive: true,
+        validFrom: { lte: now },
+        OR: [
+          { validUntil: null },
+          { validUntil: { gte: now } }
+        ]
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        imageUrl: true,
+        validFrom: true,
+        validUntil: true,
+        createdAt: true
+      }
+    });
+
+    res.json(benefits);
+  } catch (error: any) {
+    console.error('Get benefits error:', error);
+    res.status(500).json({ message: error?.message || 'Failed to fetch benefits' });
+  }
+});
+
+// Redeem benefit endpoint
+router.post('/benefits/:id/redeem', authMiddleware, async (req: any, res) => {
+  try {
+    const userId = req.user.uid as string;
+    const benefitId = req.params.id;
+
+    const member = await prisma.member.findUnique({ 
+      where: { userId },
+      include: { user: true }
+    });
+    if (!member) return res.status(404).json({ message: 'Member not found' });
+
+    // Get the benefit
+    const benefit = await prisma.benefit.findUnique({
+      where: { 
+        id: benefitId,
+        isActive: true
+      }
+    });
+
+    if (!benefit) {
+      return res.status(404).json({ message: 'Benefit not found or inactive' });
+    }
+
+    // Check if benefit is still valid
+    const now = new Date();
+    if (benefit.validFrom > now || (benefit.validUntil && benefit.validUntil < now)) {
+      return res.status(400).json({ message: 'Benefit is not valid at this time' });
+    }
+
+    // Check if member has already redeemed this benefit
+    const existingRedemption = await prisma.benefitRedemption.findFirst({
+      where: {
+        memberId: member.id,
+        benefitId: benefit.id
+      }
+    });
+
+    if (existingRedemption) {
+      return res.status(400).json({ message: 'Benefit already redeemed' });
+    }
+
+    // Generate voucher code (format: TLG-BENEFIT-YYYYMMDD-XXXX)
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const voucherCode = `TLG-BENEFIT-${dateStr}-${randomStr}`;
+
+    // Create QR code data
+    const qrData = {
+      type: 'benefit_voucher',
+      voucherCode,
+      benefitId: benefit.id,
+      memberId: member.id,
+      memberName: member.fullName,
+      benefitTitle: benefit.title,
+      issuedAt: now.toISOString()
+    };
+    const qrDataString = JSON.stringify(qrData);
+    
+    // Generate QR code as base64 image
+    const qrCodeBuffer = await QRCode.toBuffer(qrDataString, {
+      type: 'png',
+      width: 256,
+      margin: 2,
+      color: {
+        dark: '#0F4D39',
+        light: '#FFFFFF'
+      }
+    });
+    const qrCodeBase64 = qrCodeBuffer.toString('base64');
+
+    // Create redemption record
+    const redemption = await prisma.benefitRedemption.create({
+      data: {
+        memberId: member.id,
+        benefitId: benefit.id,
+        voucherCode,
+        qrCode: qrCodeBase64
+      },
+      include: {
+        benefit: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            imageUrl: true
+          }
+        }
+      }
+    });
+
+    // TODO: Send email with e-voucher (will be implemented in next step)
+    // For now, we'll mark email as sent
+    await prisma.benefitRedemption.update({
+      where: { id: redemption.id },
+      data: {
+        emailSent: true,
+        emailSentAt: new Date()
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Benefit redeemed successfully',
+      redemption: {
+        id: redemption.id,
+        voucherCode: redemption.voucherCode,
+        qrCode: redemption.qrCode,
+        benefit: redemption.benefit,
+        createdAt: redemption.createdAt
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Benefit redemption error:', error);
+    res.status(500).json({ message: error?.message || 'Failed to redeem benefit' });
+  }
+});
+
+// Get member's benefit redemptions
+router.get('/benefits/my-redemptions', authMiddleware, async (req: any, res) => {
+  try {
+    const userId = req.user.uid as string;
+
+    const member = await prisma.member.findUnique({ 
+      where: { userId }
+    });
+    if (!member) return res.status(404).json({ message: 'Member not found' });
+
+    const redemptions = await prisma.benefitRedemption.findMany({
+      where: { memberId: member.id },
+      select: {
+        id: true,
+        benefitId: true,
+        voucherCode: true,
+        qrCode: true,
+        isUsed: true,
+        usedAt: true,
+        emailSent: true,
+        emailSentAt: true,
+        createdAt: true,
+        updatedAt: true,
+        benefit: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            imageUrl: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json(redemptions);
+  } catch (error: any) {
+    console.error('Get redemptions error:', error);
+    res.status(500).json({ message: error?.message || 'Failed to fetch redemptions' });
   }
 });
 

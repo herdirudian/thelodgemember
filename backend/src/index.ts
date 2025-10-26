@@ -6,7 +6,10 @@ import dotenv from 'dotenv';
 import authRouter from './routes/auth';
 import verifyRouter from './routes/verify';
 import memberRouter from './routes/member';
+
+console.log('🔍 Importing admin router...');
 import adminRouter from './routes/admin';
+console.log('🔍 Admin router imported successfully');
 import adminActivitiesRouter from './routes/admin-activities';
 import bookingRouter from './routes/booking';
 import webhookRouter from './routes/webhook';
@@ -22,9 +25,31 @@ import { createMembershipCardPDF } from './utils/pdf';
 dotenv.config({ override: true });
 
 const app = express();
+
+// Test endpoint at the very beginning
+app.get('/api/very-early-test', (req, res) => {
+  console.log('🔥🔥🔥 Very early test endpoint hit! 🔥🔥🔥');
+  res.json({ message: 'Very early test works!', timestamp: new Date().toISOString() });
+});
+
+// Debug middleware to log request details
+app.use((req, res, next) => {
+  console.log('🚀🚀🚀 MIDDLEWARE HIT! 🚀🚀🚀');
+  console.log('🚀 REQUEST RECEIVED:', req.method, req.url);
+  console.log('=== INCOMING REQUEST ===');
+  console.log(`${req.method} ${req.url}`);
+  console.log('Full URL:', req.originalUrl);
+  console.log('Path:', req.path);
+  console.log('Query:', req.query);
+  console.log('Headers:', req.headers);
+  console.log('Raw body type:', typeof req.body);
+  console.log('========================');
+  next();
+});
+
 app.use(express.json());
 // Strengthen CORS: allow localhost variants, explicit methods and headers
-const allowedOrigins = [config.frontendUrl, 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001', 'http://localhost:3003', 'http://127.0.0.1:3003'];
+const allowedOrigins = [config.frontendUrl, 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001', 'http://localhost:3003', 'http://127.0.0.1:3003', 'http://localhost:3004', 'http://127.0.0.1:3004'];
 app.use(cors({
   origin: (origin, callback) => {
     // In development, reflect the request origin to allow dev hosts and IPs
@@ -50,8 +75,13 @@ app.use(morgan('dev'));
 // Routes
 app.use('/api', authRouter);
 app.use('/api', verifyRouter);
+console.log('Registering member router at /api/member');
 app.use('/api/member', memberRouter);
+console.log('Member router registered successfully');
+
+console.log('🔍 Registering admin router at /api/admin');
 app.use('/api/admin', adminRouter);
+console.log('🔍 Admin router registered successfully');
 app.use('/api/admin', adminActivitiesRouter);
 app.use('/api/booking', bookingRouter);
 app.use('/api/webhook', webhookRouter);
@@ -61,8 +91,25 @@ app.get('/', (_req, res) => {
   res.send({ status: 'ok', name: 'The Lodge Family Membership API' });
 });
 // Tambahkan rute health untuk prefix /api agar ping di frontend mengembalikan JSON
-app.get('/api', (_req, res) => {
+app.get('/api', (req, res) => {
+  console.log('🔥🔥🔥 /api endpoint hit directly! 🔥🔥🔥');
   res.json({ status: 'ok', name: 'The Lodge Family Membership API', path: '/api' });
+});
+
+// Simple test endpoint to verify Express is working
+app.get('/api/simple-test', (req, res) => {
+  console.log('🔥🔥🔥 Simple test endpoint hit! 🔥🔥🔥');
+  res.json({ message: 'Simple test works!', timestamp: new Date().toISOString() });
+});
+
+// Test endpoint directly in index.ts
+app.get('/api/admin/direct-test', (req, res) => {
+  console.log('🔍 Direct admin test endpoint hit!');
+  res.json({ message: 'Direct admin test working!', timestamp: new Date().toISOString() });
+});
+app.get('/api/member/direct-test', (_req, res) => {
+  console.log('Direct test endpoint hit!');
+  res.json({ message: 'Direct test endpoint works!' });
 });
 
 // Static files for generated membership cards
@@ -71,7 +118,7 @@ app.use('/files/cards', express.static(path.join(process.cwd(), 'cards')));
 // Static files for uploaded assets (fallback jika tidak menggunakan Cloudinary)
 app.use('/files/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
-const PORT = process.env.PORT ? Number(process.env.PORT) : 5000;
+const PORT = 5001; // Changed to 5001 to avoid conflicts
 app.listen(PORT, () => {
   console.log(`API server listening on port ${PORT}`);
 });

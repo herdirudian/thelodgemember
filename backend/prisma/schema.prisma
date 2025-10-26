@@ -43,6 +43,7 @@ model Member {
   pointAdjustments   PointAdjustment[]
   tourismTicketBookings TourismTicketBooking[]
   accommodationBookings AccommodationBooking[]
+  benefitRedemptions BenefitRedemption[]
   user               User     @relation(fields: [userId], references: [id])
 }
 
@@ -67,6 +68,8 @@ model Ticket {
   friendlyCode  String?
   createdAt     DateTime @default(now())
   redeemedAt    DateTime?
+  promoId       String?
+  promo         Promo?   @relation(fields: [promoId], references: [id])
   member        Member   @relation(fields: [memberId], references: [id])
 }
 
@@ -135,6 +138,20 @@ model Announcement {
   createdBy   String
 }
 
+model Benefit {
+  id          String   @id @default(uuid()) @db.Char(36)
+  title       String
+  description String
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  validFrom   DateTime @default(now())
+  validUntil  DateTime?
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  redemptions BenefitRedemption[]
+}
+
 model Promo {
   id             String    @id @default(uuid()) @db.Char(36)
   title          String
@@ -156,6 +173,7 @@ model Promo {
   showJoinButton Boolean   @default(true)
   // add back relation from PointRedemption
   pointRedemptions PointRedemption[]
+  tickets        Ticket[]
 }
 model SliderImage {
   id          String   @id @default(uuid()) @db.Char(36)
@@ -221,6 +239,7 @@ enum VoucherType {
   POINTS
   EVENT
   TOURISM_TICKET
+  BENEFIT
 }
 
 enum PromoType {
@@ -379,6 +398,27 @@ enum PaymentStatus {
   EXPIRED
   FAILED
   CANCELLED
+}
+
+model BenefitRedemption {
+  id            String   @id @default(uuid()) @db.Char(36)
+  memberId      String
+  benefitId     String
+  voucherCode   String   @unique
+  qrCode        String   // QR code data/URL
+  isUsed        Boolean  @default(false)
+  usedAt        DateTime?
+  emailSent     Boolean  @default(false)
+  emailSentAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  member        Member   @relation(fields: [memberId], references: [id])
+  benefit       Benefit  @relation(fields: [benefitId], references: [id])
+  
+  @@index([memberId])
+  @@index([benefitId])
+  @@index([voucherCode])
 }
 
 model Settings {
