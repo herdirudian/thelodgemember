@@ -108,6 +108,15 @@ router.post('/tickets/redeem-free', authMiddleware, async (req: any, res) => {
       friendlyCode,
     }});
 
+    // Create notification for ticket redemption
+    try {
+      const { NotificationService } = await import('../utils/notificationService');
+      await NotificationService.createTicketClaimNotification(member.id, ticketName, ticket.id);
+    } catch (notifError) {
+      console.error('Error creating ticket claim notification:', notifError);
+      // Don't fail the ticket creation if notification fails
+    }
+
     // Send email notification with e-voucher
     try {
       const { sendEmail } = await import('../utils/email');

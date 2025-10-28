@@ -48,6 +48,7 @@ model Member {
   tourismTicketBookings TourismTicketBooking[]
   accommodationBookings AccommodationBooking[]
   benefitRedemptions BenefitRedemption[]
+  notifications      Notification[]
   user               User     @relation(fields: [userId], references: [id])
 }
 
@@ -423,6 +424,76 @@ model BenefitRedemption {
   @@index([memberId])
   @@index([benefitId])
   @@index([voucherCode])
+}
+
+// Notification System Models
+model Notification {
+  id          String           @id @default(uuid()) @db.Char(36)
+  memberId    String
+  title       String
+  message     String
+  type        NotificationType
+  isRead      Boolean          @default(false)
+  readAt      DateTime?
+  // Optional reference to related entities
+  relatedId   String?          // ID of related entity (promo, ticket, etc.)
+  relatedType String?          // Type of related entity
+  imageUrl    String?          // Optional image for the notification
+  actionUrl   String?          // Optional URL for action button
+  actionText  String?          // Text for action button
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  
+  member      Member           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  
+  @@index([memberId])
+  @@index([isRead])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model AdminMessage {
+  id          String   @id @default(uuid()) @db.Char(36)
+  title       String
+  message     String
+  imageUrl    String?
+  // Target audience
+  targetType  MessageTargetType @default(ALL_MEMBERS)
+  targetIds   String?  // JSON array of specific member IDs if targetType is SPECIFIC_MEMBERS
+  // Scheduling
+  isScheduled Boolean  @default(false)
+  scheduledAt DateTime?
+  // Status
+  isActive    Boolean  @default(true)
+  isSent      Boolean  @default(false)
+  sentAt      DateTime?
+  // Admin info
+  createdBy   String
+  createdByName String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([targetType])
+  @@index([isActive])
+  @@index([isSent])
+  @@index([scheduledAt])
+}
+
+enum NotificationType {
+  ADMIN_MESSAGE      // Pesan dari admin
+  NEW_PROMO         // Promo/postingan baru
+  TICKET_CLAIMED    // Tiket diklaim
+  POINTS_EARNED     // Poin bertambah
+  POINTS_REDEEMED   // Poin ditukar
+  EVENT_REMINDER    // Pengingat event
+  MEMBERSHIP_UPDATE // Update membership
+  SYSTEM_UPDATE     // Update sistem
+}
+
+enum MessageTargetType {
+  ALL_MEMBERS       // Semua member
+  SPECIFIC_MEMBERS  // Member tertentu
+  ACTIVE_MEMBERS    // Member aktif saja
 }
 
 model Settings {

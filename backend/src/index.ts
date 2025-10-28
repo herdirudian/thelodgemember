@@ -13,6 +13,7 @@ console.log('🔍 Admin router imported successfully');
 import adminActivitiesRouter from './routes/admin-activities';
 import bookingRouter from './routes/booking';
 import webhookRouter from './routes/webhook';
+import notificationsRouter from './routes/notifications';
 import path from 'path';
 import fs from 'fs';
 import { PrismaClient, Role } from '@prisma/client';
@@ -85,6 +86,7 @@ console.log('🔍 Admin router registered successfully');
 app.use('/api/admin', adminActivitiesRouter);
 app.use('/api/booking', bookingRouter);
 app.use('/api/webhook', webhookRouter);
+app.use('/api/notifications', notificationsRouter);
 
 // Health
 app.get('/', (_req, res) => {

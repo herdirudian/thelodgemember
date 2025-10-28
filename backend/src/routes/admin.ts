@@ -147,7 +147,7 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
       
       const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
       
-      await prisma.redeemHistory.create({ 
+      const redeemHistory = await prisma.redeemHistory.create({ 
         data: { 
           memberId, 
           memberName, 
@@ -160,6 +160,15 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
           proofUrl 
         } 
       });
+
+      // Create notification for ticket redemption
+      try {
+        const { NotificationService } = await import('../utils/notificationService');
+        await NotificationService.createTicketClaimNotification(memberId, voucherLabel || 'Tiket', redeemHistory.id);
+      } catch (notifError) {
+        console.error('Error creating ticket claim notification:', notifError);
+        // Don't fail the redemption if notification fails
+      }
 
       result = {
         success: true,
@@ -225,7 +234,7 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
         
         const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
         
-        await prisma.redeemHistory.create({ 
+        const redeemHistory = await prisma.redeemHistory.create({ 
           data: { 
             memberId, 
             memberName, 
@@ -238,6 +247,15 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
             proofUrl 
           } 
         });
+
+        // Create notification for point redemption
+        try {
+          const { NotificationService } = await import('../utils/notificationService');
+          await NotificationService.createTicketClaimNotification(memberId, voucherLabel || 'Redeem Poin', redeemHistory.id);
+        } catch (notifError) {
+          console.error('Error creating point redemption notification:', notifError);
+          // Don't fail the redemption if notification fails
+        }
 
         result = {
           success: true,
@@ -1163,10 +1181,28 @@ router.delete('/registration-codes/:id', adminAuth, async (req, res) => {
 
 // Announcements
 router.post('/announcements', adminAuth, async (req, res) => {
-  const { title, description, imageUrl } = req.body as { title: string; description: string; imageUrl?: string };
-  if (!title || !description) return res.status(400).json({ message: 'Missing fields' });
-  const created = await prisma.announcement.create({ data: { title, description, imageUrl, createdBy: 'admin', postedAt: new Date() } });
-  res.json(created);
+  try {
+    const { title, description, imageUrl } = req.body as { title: string; description: string; imageUrl?: string };
+    if (!title || !description) return res.status(400).json({ message: 'Missing fields' });
+    
+    const created = await prisma.announcement.create({ 
+      data: { title, description, imageUrl, createdBy: 'admin', postedAt: new Date() } 
+    });
+    
+    // Create notifications for all active members
+    try {
+      const { NotificationService } = await import('../utils/notificationService');
+      await NotificationService.createAnnouncementNotification(created.id, title, description);
+    } catch (notifError) {
+      console.error('Error creating announcement notifications:', notifError);
+      // Don't fail the announcement creation if notification fails
+    }
+    
+    res.json(created);
+  } catch (error) {
+    console.error('Error creating announcement:', error);
+    res.status(500).json({ message: 'Failed to create announcement' });
+  }
 });
 
 // Events CRUD
