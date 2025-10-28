@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Lodge Family - Membership System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+            position: relative;
+        }
+        
+        .logo {
+            width: 100px;
+            height: 100px;
+            background: #667eea;
+            border-radius: 50%;
+            margin: 0 auto 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 1rem;
+        }
+        
+        h2 {
+            color: #667eea;
+            margin-bottom: 1.5rem;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 2rem;
+            font-size: 1.1rem;
+        }
+        
+        .status {
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            font-weight: bold;
+        }
+        
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin: 0.5rem;
+            transition: background 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn:hover {
+            background: #5a6fd8;
+        }
+        
+        .btn.secondary {
+            background: #6c757d;
+        }
+        
+        .btn.secondary:hover {
+            background: #5a6268;
+        }
+        
+        .info {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            text-align: left;
+        }
+        
+        .info h3 {
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+            text-align: left;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #333;
+            font-weight: bold;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .page {
+            display: none;
+        }
+        
+        .page.active {
+            display: block;
+        }
+        
+        .nav-buttons {
+            margin-top: 1rem;
+        }
+        
+        .back-btn {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        
+        .back-btn:hover {
+            background: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Home Page -->
+        <div id="home-page" class="page active">
+            <div class="logo">TLF</div>
+            <h1>The Lodge Family</h1>
+            <p class="subtitle">Escape to Nature</p>
+            
+            <div id="status" class="status loading">🔄 Initializing system...</div>
+            
+            <div class="info">
+                <h3>🚀 System Status</h3>
+                <p><strong>Backend:</strong> <span id="backend-status">Checking...</span></p>
+                <p><strong>Database:</strong> <span id="db-status">Checking...</span></p>
+                <p><strong>Frontend:</strong> <span id="frontend-status">Active</span></p>
+            </div>
+            
+            <div class="nav-buttons">
+                <button class="btn" onclick="showPage('login-page')">🔐 Login Member</button>
+                <button class="btn secondary" onclick="checkBackend()">🔄 Test Backend</button>
+                <button class="btn secondary" onclick="window.open('/api', '_blank')">📡 View API</button>
+            </div>
+        </div>
+        
+        <!-- Login Page -->
+        <div id="login-page" class="page">
+            <button class="back-btn" onclick="showPage('home-page')">← Back</button>
+            <div class="logo">TLF</div>
+            <h2>Member Login</h2>
+            <p class="subtitle">Welcome back to The Lodge Family</p>
+            
+            <form id="login-form" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" name="email" required placeholder="Enter your email">
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required placeholder="Enter your password">
+                </div>
+                
+                <div id="login-status" class="status" style="display: none;"></div>
+                
+                <div class="nav-buttons">
+                    <button type="submit" class="btn">🔐 Login</button>
+                    <button type="button" class="btn secondary" onclick="showPage('register-page')">📝 Register</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Register Page -->
+        <div id="register-page" class="page">
+            <button class="back-btn" onclick="showPage('login-page')">← Back</button>
+            <div class="logo">TLF</div>
+            <h2>Member Registration</h2>
+            <p class="subtitle">Join The Lodge Family</p>
+            
+            <form id="register-form" onsubmit="handleRegister(event)">
+                <div class="form-group">
+                    <label for="reg-name">Full Name</label>
+                    <input type="text" id="reg-name" name="name" required placeholder="Enter your full name">
+                </div>
+                
+                <div class="form-group">
+                    <label for="reg-email">Email Address</label>
+                    <input type="email" id="reg-email" name="email" required placeholder="Enter your email">
+                </div>
+                
+                <div class="form-group">
+                    <label for="reg-password">Password</label>
+                    <input type="password" id="reg-password" name="password" required placeholder="Create a password">
+                </div>
+                
+                <div class="form-group">
+                    <label for="reg-phone">Phone Number</label>
+                    <input type="tel" id="reg-phone" name="phone" required placeholder="Enter your phone number">
+                </div>
+                
+                <div id="register-status" class="status" style="display: none;"></div>
+                
+                <div class="nav-buttons">
+                    <button type="submit" class="btn">📝 Register</button>
+                    <button type="button" class="btn secondary" onclick="showPage('login-page')">🔐 Login Instead</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Dashboard Page -->
+        <div id="dashboard-page" class="page">
+            <button class="back-btn" onclick="logout()">← Logout</button>
+            <div class="logo">TLF</div>
+            <h2>Member Dashboard</h2>
+            <p class="subtitle">Welcome, <span id="member-name">Member</span>!</p>
+            
+            <div class="info">
+                <h3>🏠 Your Membership</h3>
+                <p><strong>Status:</strong> <span id="member-status">Active</span></p>
+                <p><strong>Member Since:</strong> <span id="member-since">2024</span></p>
+                <p><strong>Points:</strong> <span id="member-points">0</span></p>
+            </div>
+            
+            <div class="nav-buttons">
+                <button class="btn" onclick="alert('Booking feature coming soon!')">🏨 Book Stay</button>
+                <button class="btn secondary" onclick="alert('Profile feature coming soon!')">👤 Profile</button>
+                <button class="btn secondary" onclick="logout()">🚪 Logout</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let currentUser = null;
+        
+        // Page navigation
+        function showPage(pageId) {
+            // Hide all pages
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+            
+            // Show selected page
+            document.getElementById(pageId).classList.add('active');
+        }
+        
+        // Backend status check
+        async function checkBackend() {
+            const statusEl = document.getElementById('status');
+            const backendStatusEl = document.getElementById('backend-status');
+            
+            statusEl.className = 'status loading';
+            statusEl.innerHTML = '🔄 Testing backend connection...';
+            backendStatusEl.innerHTML = 'Testing...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api`);
+                const data = await response.json();
+                
+                if (data.status === 'ok') {
+                    statusEl.className = 'status success';
+                    statusEl.innerHTML = '✅ Backend is running successfully!';
+                    backendStatusEl.innerHTML = '✅ Online';
+                    
+                    // Test database connection
+                    document.getElementById('db-status').innerHTML = '✅ Connected';
+                } else {
+                    throw new Error('Backend returned unexpected response');
+                }
+            } catch (error) {
+                statusEl.className = 'status error';
+                statusEl.innerHTML = '❌ Backend connection failed: ' + error.message;
+                backendStatusEl.innerHTML = '❌ Offline';
+                document.getElementById('db-status').innerHTML = '❌ Unknown';
+            }
+        }
+        
+        // Login handler
+        async function handleLogin(event) {
+            event.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const statusEl = document.getElementById('login-status');
+            
+            statusEl.style.display = 'block';
+            statusEl.className = 'status loading';
+            statusEl.innerHTML = '🔄 Logging in...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    statusEl.className = 'status success';
+                    statusEl.innerHTML = '✅ Login successful!';
+                    
+                    // Store user data
+                    currentUser = data.user;
+                    localStorage.setItem('user', JSON.stringify(currentUser));
+                    
+                    // Update dashboard
+                    document.getElementById('member-name').textContent = currentUser.name || 'Member';
+                    
+                    // Redirect to dashboard
+                    setTimeout(() => {
+                        showPage('dashboard-page');
+                    }, 1000);
+                } else {
+                    throw new Error(data.message || 'Login failed');
+                }
+            } catch (error) {
+                statusEl.className = 'status error';
+                statusEl.innerHTML = '❌ Login failed: ' + error.message;
+            }
+        }
+        
+        // Register handler
+        async function handleRegister(event) {
+            event.preventDefault();
+            
+            const name = document.getElementById('reg-name').value;
+            const email = document.getElementById('reg-email').value;
+            const password = document.getElementById('reg-password').value;
+            const phone = document.getElementById('reg-phone').value;
+            const statusEl = document.getElementById('register-status');
+            
+            statusEl.style.display = 'block';
+            statusEl.className = 'status loading';
+            statusEl.innerHTML = '🔄 Creating account...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name, email, password, phone })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    statusEl.className = 'status success';
+                    statusEl.innerHTML = '✅ Registration successful! Please login.';
+                    
+                    // Clear form
+                    document.getElementById('register-form').reset();
+                    
+                    // Redirect to login
+                    setTimeout(() => {
+                        showPage('login-page');
+                    }, 2000);
+                } else {
+                    throw new Error(data.message || 'Registration failed');
+                }
+            } catch (error) {
+                statusEl.className = 'status error';
+                statusEl.innerHTML = '❌ Registration failed: ' + error.message;
+            }
+        }
+        
+        // Logout handler
+        function logout() {
+            currentUser = null;
+            localStorage.removeItem('user');
+            showPage('home-page');
+        }
+        
+        // Check if user is already logged in
+        function checkLoginStatus() {
+            const savedUser = localStorage.getItem('user');
+            if (savedUser) {
+                try {
+                    currentUser = JSON.parse(savedUser);
+                    document.getElementById('member-name').textContent = currentUser.name || 'Member';
+                    showPage('dashboard-page');
+                } catch (error) {
+                    localStorage.removeItem('user');
+                }
+            }
+        }
+        
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            checkLoginStatus();
+            setTimeout(checkBackend, 1000);
+        });
+    </script>
+</body>
+</html>
