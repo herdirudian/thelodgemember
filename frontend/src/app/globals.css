@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --primary: #0F4D39;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* Force light mode: remove system dark preference override */
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Card styles */
+.card {
+  @apply rounded-xl border border-gray-200 shadow-sm bg-white;
+}
+
+.btn-primary {
+  @apply rounded-lg bg-[#0F4D39] text-white px-4 py-2 hover:bg-[#0c3e2d] transition;
+}
