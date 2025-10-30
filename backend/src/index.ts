@@ -49,6 +49,21 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+
+// Debug middleware for body parsing
+app.use((req, res, next) => {
+  console.log('🔍 BODY PARSING DEBUG:');
+  console.log('Content-Type:', req.get('Content-Type'));
+  console.log('Content-Length:', req.get('Content-Length'));
+  console.log('Body type:', typeof req.body);
+  console.log('Body content:', req.body);
+  console.log('Body keys:', req.body ? Object.keys(req.body) : 'N/A');
+  console.log('Raw body:', req.body);
+  console.log('Is JSON?:', req.is('application/json'));
+  console.log('Request readable?:', req.readable);
+  next();
+});
+
 // CORS configuration: prioritize production domain
 const allowedOrigins = [config.frontendUrl, 'https://family.thelodgegroup.id', 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001', 'http://localhost:3003', 'http://127.0.0.1:3003', 'http://localhost:3004', 'http://127.0.0.1:3004'];
 app.use(cors({

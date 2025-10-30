@@ -110,12 +110,10 @@ export default function AdminEvents() {
       const eventData = {
         title: formTitle,
         description: formDescription,
-        startDate: new Date(formStartDate).toISOString(),
-        endDate: new Date(formEndDate).toISOString(),
-        location: formLocation || null,
-        maxParticipants: formMaxParticipants ? parseInt(formMaxParticipants) : null,
-        pointsReward: parseInt(formPointsReward) || 0,
-        isActive: formIsActive,
+        eventDate: formStartDate, // Backend expects eventDate, not startDate
+        quota: formMaxParticipants || "100", // Backend expects quota as string
+        location: formLocation || undefined,
+        terms: undefined, // Optional field for backend
       };
 
       const url = editEvent ? `/api/admin/events/${editEvent.id}` : `/api/admin/events`;
@@ -130,7 +128,10 @@ export default function AdminEvents() {
         body: JSON.stringify(eventData),
       });
 
-      if (!response.ok) throw new Error(`Failed to ${editEvent ? "update" : "create"} event`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to ${editEvent ? "update" : "create"} event`);
+      }
       
       setSuccess(`Event ${editEvent ? "updated" : "created"} successfully!`);
       setShowForm(false);

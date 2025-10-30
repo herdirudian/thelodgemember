@@ -164,6 +164,15 @@ router.post('/tickets/redeem-free', authMiddleware, async (req: any, res) => {
       `;
       
       await sendEmail(member.user.email, emailSubject, emailHtml, undefined, attachments);
+      
+      // Update email sent status for event registration
+      await prisma.eventRegistration.update({
+        where: { id: registrationId },
+        data: {
+          emailSent: true,
+          emailSentAt: new Date()
+        }
+      });
     } catch (emailError) {
       console.error('Failed to send ticket email:', emailError);
       // Don't fail the request if email fails
@@ -560,6 +569,15 @@ router.post('/points/redeem', authMiddleware, async (req: any, res) => {
       `;
       
       await sendEmail(member.user.email, emailSubject, emailHtml, undefined, attachments);
+      
+      // Update email sent status
+      await prisma.promoRegistration.update({
+        where: { id: promoRegistration.id },
+        data: {
+          emailSent: true,
+          emailSentAt: new Date()
+        }
+      });
     } catch (emailError) {
       console.error('Failed to send point redemption email:', emailError);
       // Don't fail the request if email fails
@@ -577,6 +595,9 @@ router.get('/promos', async (req, res) => {
         startDate: { lte: now },
         endDate: { gte: now }
       },
+      include: {
+        event: true // Include linked event data
+      },
       orderBy: { startDate: 'desc' }
     });
 
@@ -593,13 +614,167 @@ router.get('/promos', async (req, res) => {
           }
         }
       } catch {}
-      return { ...p, imageUrl: fixedImageUrl };
+      
+      // Map the event relationship to linkedEvent for frontend compatibility
+      return { 
+        ...p, 
+        imageUrl: fixedImageUrl,
+        linkedEvent: p.event, // Map event to linkedEvent
+        linkedEventId: p.eventId // Ensure linkedEventId is available
+      };
     });
 
     res.json(enriched);
   } catch (e: any) {
     console.error('Member promos error:', e);
     res.status(500).json({ message: e?.message || 'Server error' });
+  }
+});
+
+// Register for promo (for promos without linked events)
+router.post('/promos/:id/register', authMiddleware, async (req: any, res) => {
+  try {
+    const userId = req.user.uid as string;
+    const promoId = req.params.id;
+
+    // Get member info
+    const member = await prisma.member.findUnique({ 
+      where: { userId },
+      include: { user: true }
+    });
+    if (!member) return res.status(404).json({ message: 'Member not found' });
+
+    // Get promo info
+    const promo = await prisma.promo.findUnique({
+      where: { id: promoId }
+    });
+    if (!promo) return res.status(404).json({ message: 'Promo not found' });
+
+    // Check if promo is still active
+    const now = new Date();
+    if (now < promo.startDate || now > promo.endDate) {
+      return res.status(400).json({ message: 'Promo is not active' });
+    }
+
+    // Generate registration data
+    const registrationId = uuidv4();
+    const memberName = member.fullName || member.user.name || 'Member';
+    
+    // Generate QR code
+    const qrData = `PROMO:${promoId}:${memberName}:${registrationId}`;
+    const qr = await generateQRDataURL(qrData);
+    
+    // Generate friendly code
+    const friendlyCode = signPayloadWithFriendlyCode({
+      type: 'promo_registration',
+      promoId,
+      memberId: member.id,
+      registrationId,
+      memberName,
+      timestamp: now.toISOString()
+    });
+
+    // Save promo registration to database
+    const promoRegistration = await prisma.promoRegistration.create({
+      data: {
+        memberId: member.id,
+        promoId: promoId,
+        registrationId: registrationId,
+        voucherCode: friendlyCode,
+        qrCode: qr,
+        status: 'ACTIVE',
+        isUsed: false,
+        emailSent: false
+      }
+    });
+
+    // Send email notification with e-voucher for promo registration
+    try {
+      const emailSubject = `E-Voucher Promo: ${promo.title} - The Lodge Family`;
+      
+      // Create QR code attachment
+      const qrBuffer = Buffer.from(qr.split(',')[1], 'base64');
+      const attachments = [{
+        filename: 'qr-code.png',
+        content: qrBuffer,
+        cid: 'qrcode'
+      }];
+      
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+          <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <h2 style="color: #0F4D39; text-align: center; margin-bottom: 30px;">E-Voucher Pendaftaran Promo</h2>
+            
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <h3 style="color: #0F4D39; margin-top: 0;">Detail Promo</h3>
+              <p><strong>Nama Promo:</strong> ${promo.title}</p>
+              <p><strong>Nama Member:</strong> ${memberName}</p>
+              <p><strong>Kode Voucher:</strong> ${friendlyCode}</p>
+              <p><strong>Periode Promo:</strong> ${promo.startDate.toLocaleDateString('id-ID')} - ${promo.endDate.toLocaleDateString('id-ID')}</p>
+              ${promo.description ? `<p><strong>Deskripsi:</strong> ${promo.description}</p>` : ''}
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <h3 style="color: #0F4D39;">QR Code E-Voucher</h3>
+              <img src="cid:qrcode" alt="QR Code" style="max-width: 200px; border: 2px solid #0F4D39; border-radius: 8px;">
+              <p style="margin-top: 15px; color: #666; font-size: 14px;">
+                Tunjukkan QR Code ini saat menggunakan promo
+              </p>
+            </div>
+            
+            <div style="background-color: #e8f5e8; padding: 20px; border-radius: 8px; border-left: 4px solid #0F4D39;">
+              <h4 style="color: #0F4D39; margin-top: 0;">Informasi Penting:</h4>
+              <ul style="margin: 0; padding-left: 20px; color: #333;">
+                <li>E-voucher ini berlaku sebagai bukti pendaftaran promo</li>
+                <li>Harap tunjukkan e-voucher ini (digital atau print) saat menggunakan promo</li>
+                <li>Promo berlaku sesuai syarat dan ketentuan yang berlaku</li>
+                <li>Untuk pertanyaan, hubungi customer service kami</li>
+              </ul>
+            </div>
+            
+            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+              <p style="margin: 0; color: #0F4D39; font-weight: bold;">The Lodge Family</p>
+              <p style="margin: 5px 0; color: #666; font-size: 14px;">
+                Email: ${process.env.FROM_EMAIL} | Website: ${process.env.FRONTEND_URL}
+              </p>
+              <p style="margin: 0; color: #999; font-size: 12px;">
+                Email ini dikirim secara otomatis, mohon tidak membalas email ini.
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      await sendEmail(member.user.email, emailSubject, emailHtml, undefined, attachments);
+      
+      // Update email sent status
+      await prisma.promoRegistration.update({
+        where: { id: promoRegistration.id },
+        data: {
+          emailSent: true,
+          emailSentAt: new Date()
+        }
+      });
+    } catch (emailError) {
+      console.error('Failed to send promo registration email:', emailError);
+      // Don't fail the request if email fails
+    }
+
+    res.json({ 
+      registration: {
+        id: registrationId,
+        promoId,
+        memberId: member.id,
+        memberName,
+        qr,
+        friendlyCode,
+        createdAt: now.toISOString()
+      },
+      message: 'Berhasil mendaftar promo! E-voucher telah dikirim ke email Anda.'
+    });
+  } catch (e) { 
+    console.error(e); 
+    res.status(500).json({ message: 'Server error' }); 
   }
 });
 
@@ -1337,6 +1512,117 @@ router.get('/benefits/my-redemptions', authMiddleware, async (req: any, res) => 
   } catch (error: any) {
     console.error('Get redemptions error:', error);
     res.status(500).json({ message: error?.message || 'Failed to fetch redemptions' });
+  }
+});
+
+// Get member's claimed promo vouchers
+router.get('/promos/my-vouchers', authMiddleware, async (req: any, res) => {
+  try {
+    const userId = req.user.uid as string;
+
+    // Get member info
+    const member = await prisma.member.findUnique({ 
+      where: { userId }
+    });
+    if (!member) return res.status(404).json({ message: 'Member not found' });
+
+    // Get member's promo registrations
+    const promoRegistrations = await prisma.promoRegistration.findMany({
+      where: { memberId: member.id },
+      include: {
+        promo: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            imageUrl: true,
+            startDate: true,
+            endDate: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Transform data to match frontend expectations
+    const vouchers = promoRegistrations.map(registration => ({
+      id: registration.id,
+      title: registration.promo.title,
+      description: registration.promo.description,
+      imageUrl: registration.promo.imageUrl,
+      voucherCode: registration.voucherCode,
+      qrCode: registration.qrCode,
+      status: registration.status,
+      isUsed: registration.isUsed,
+      usedAt: registration.usedAt,
+      createdAt: registration.createdAt,
+      validUntil: registration.promo.endDate,
+      promo: registration.promo
+    }));
+
+    res.json({ vouchers });
+  } catch (e) { 
+    console.error(e); 
+    res.status(500).json({ message: 'Server error' }); 
+  }
+});
+
+// Get member's tourism ticket bookings
+router.get('/bookings/tourism-tickets', authMiddleware, async (req: any, res) => {
+  try {
+    const memberId = req.user.id;
+
+    const bookings = await prisma.tourismTicketBooking.findMany({
+      where: {
+        memberId: memberId,
+        status: 'PAID' // Only show paid/confirmed bookings
+      },
+      include: {
+        ticket: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            location: true,
+            imageUrl: true,
+            price: true,
+            finalPrice: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Transform data to match frontend expectations
+    const tickets = bookings.map(booking => ({
+      id: booking.id,
+      ticketName: booking.ticket.name,
+      description: booking.ticket.description,
+      location: booking.ticket.location,
+      quantity: booking.quantity,
+      totalPrice: booking.totalAmount,
+      status: booking.validUntil && new Date(booking.validUntil) < new Date() ? 'EXPIRED' : 
+              booking.usedAt ? 'USED' : 'ACTIVE',
+      voucherCode: booking.voucherCode,
+      validDate: booking.validUntil,
+      bookingDate: booking.createdAt,
+      usedAt: booking.usedAt,
+      qrCode: booking.qrCode,
+      imageUrl: booking.ticket.imageUrl,
+      includes: [], // Can be populated from ticket details if needed
+      terms: [] // Can be populated from ticket details if needed
+    }));
+
+    res.json({
+      success: true,
+      tickets
+    });
+  } catch (error: any) {
+    console.error('Get tourism ticket bookings error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: error?.message || 'Failed to fetch tourism ticket bookings' 
+    });
   }
 });
 

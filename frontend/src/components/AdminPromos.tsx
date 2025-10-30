@@ -66,6 +66,11 @@ export default function AdminPromos() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  // Detail modal states
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<PromoItem | null>(null);
+  const [joiningEvent, setJoiningEvent] = useState(false);
+
   const loadItems = async () => {
     setLoading(true);
     setError("");
@@ -234,6 +239,31 @@ export default function AdminPromos() {
     } catch (e: any) {
       setError(e?.message || "Failed to delete promo");
     }
+  };
+
+  // Handler for "Lihat Selengkapnya" button
+  const handleViewDetails = (item: PromoItem) => {
+    setSelectedItem(item);
+    setShowDetailModal(true);
+  };
+
+  // Handler for "Join Event" button
+  const handleJoinEvent = async (item: PromoItem) => {
+    setJoiningEvent(true);
+    try {
+      // Simulate joining event - in real implementation, this would call an API
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setSuccess(`Successfully joined event: ${item.title}`);
+    } catch (e: any) {
+      setError(e?.message || "Failed to join event");
+    }
+    setJoiningEvent(false);
+  };
+
+  // Close detail modal
+  const closeDetailModal = () => {
+    setShowDetailModal(false);
+    setSelectedItem(null);
   };
 
   // Filter and search logic
@@ -405,19 +435,39 @@ export default function AdminPromos() {
                       )}
                     </td>
                     <td className="px-6 py-4 text-sm font-medium">
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleEdit(item)}
-                          className="text-indigo-600 hover:text-indigo-900"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          Hapus
-                        </button>
+                      <div className="flex flex-col space-y-2">
+                        {/* Show event-specific buttons for EVENT and EXCLUSIVE_MEMBER types */}
+                        {(item.type === "EVENT" || item.type === "EXCLUSIVE_MEMBER") && (
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleViewDetails(item)}
+                              className="px-3 py-1 bg-[#0F4D39] text-white rounded-lg hover:bg-[#0e3f30] transition text-xs font-medium"
+                            >
+                              Lihat Selengkapnya
+                            </button>
+                            <button
+                              onClick={() => handleJoinEvent(item)}
+                              className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-xs font-medium"
+                            >
+                              Join Event
+                            </button>
+                          </div>
+                        )}
+                        {/* Admin action buttons */}
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleEdit(item)}
+                            className="text-indigo-600 hover:text-indigo-900"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item.id)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            Hapus
+                          </button>
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -845,6 +895,95 @@ export default function AdminPromos() {
               >
                 {editSaving ? "Menyimpan..." : "Update"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Detail Modal */}
+      {showDetailModal && selectedItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold text-gray-900">Detail Event</h3>
+              <button
+                onClick={closeDetailModal}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {selectedItem.imageUrl && (
+                <div className="w-full h-48 bg-gray-100 rounded-lg overflow-hidden">
+                  <img 
+                    src={selectedItem.imageUrl} 
+                    alt={selectedItem.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+
+              <div>
+                <h4 className="text-lg font-semibold text-gray-900 mb-2">{selectedItem.title}</h4>
+                <p className="text-gray-700 leading-relaxed">{selectedItem.description}</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <span className="text-sm font-medium text-gray-500">Tipe:</span>
+                  <p className="text-gray-900">
+                    {selectedItem.type === "EVENT" ? "Event" : 
+                     selectedItem.type === "EXCLUSIVE_MEMBER" ? "Exclusive Member" :
+                     selectedItem.type === "REDEEM_POINTS" ? "Redeem Points" : "New Member Benefit"}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-sm font-medium text-gray-500">Periode:</span>
+                  <p className="text-gray-900">
+                    {new Date(selectedItem.startDate).toLocaleDateString('id-ID')} - {new Date(selectedItem.endDate).toLocaleDateString('id-ID')}
+                  </p>
+                </div>
+                {selectedItem.quota && (
+                  <div>
+                    <span className="text-sm font-medium text-gray-500">Kuota:</span>
+                    <p className="text-gray-900">{selectedItem.quota} peserta</p>
+                  </div>
+                )}
+                {selectedItem.eventId && (
+                  <div>
+                    <span className="text-sm font-medium text-gray-500">Event ID:</span>
+                    <p className="text-gray-900">{selectedItem.eventId}</p>
+                  </div>
+                )}
+                {selectedItem.pointsRequired && (
+                  <div>
+                    <span className="text-sm font-medium text-gray-500">Poin Diperlukan:</span>
+                    <p className="text-gray-900">{selectedItem.pointsRequired} poin</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4 border-t">
+                <button
+                  onClick={closeDetailModal}
+                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Tutup
+                </button>
+                {(selectedItem.type === "EVENT" || selectedItem.type === "EXCLUSIVE_MEMBER") && (
+                  <button
+                    onClick={() => handleJoinEvent(selectedItem)}
+                    disabled={joiningEvent}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {joiningEvent ? "Bergabung..." : "Join Event"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

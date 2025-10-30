@@ -1,6 +1,12 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import Link from "next/link";
+import Image from "next/image";
+import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -51,7 +57,7 @@ export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen flex">
       {/* Left Side - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden" style={{
+      <div className="hidden" style={{
         backgroundImage: 'url(/BG_TheLodge.svg)',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
@@ -64,9 +70,11 @@ export default function ForgotPasswordPage() {
           {/* Logo */}
           <div className="mb-8">
             <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm p-4">
-              <img 
-                src="/LOGO TLG WHITE.svg" 
+              <Image 
+                src="/LOGO TLG WHITE (1).svg" 
                 alt="The Lodge Family Logo" 
+                width={96}
+                height={96}
                 className="w-full h-full object-contain"
               />
             </div>
@@ -121,16 +129,18 @@ export default function ForgotPasswordPage() {
       </div>
 
       {/* Right Side - Forgot Password Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-gray-50">
+      <div className="w-full flex items-center justify-center p-8 bg-gray-50">
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
           <div className="lg:hidden text-center mb-8">
             <div className="w-16 h-16 bg-[#0F4D39] rounded-full mx-auto mb-4 flex items-center justify-center p-2">
-              <img 
-                src="/LOGO TLG WHITE.svg" 
-                alt="The Lodge Family Logo" 
-                className="w-full h-full object-contain"
-              />
+              <Image 
+                  src="/LOGO TLG WHITE (1).svg" 
+                  alt="The Lodge Family Logo" 
+                  width={80}
+                  height={80}
+                  className="w-full h-full object-contain"
+                />
             </div>
             <h1 className="text-2xl font-bold text-gray-900">The Lodge Family</h1>
           </div>

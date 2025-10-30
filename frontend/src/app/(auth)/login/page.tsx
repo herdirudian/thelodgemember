@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 
 export default function LoginDesign3() {
   const [email, setEmail] = useState("");
@@ -67,11 +68,13 @@ export default function LoginDesign3() {
           {/* Logo */}
           <div className="mb-8">
             <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm p-4">
-              <img 
-                src="/LOGO TLG WHITE.svg" 
-                alt="The Lodge Family Logo" 
-                className="w-full h-full object-contain"
-              />
+              <Image 
+                  src="/LOGO TLG WHITE (1).svg" 
+                  alt="The Lodge Family Logo" 
+                  width={80}
+                  height={80}
+                  className="w-full h-full object-contain"
+                />
             </div>
           </div>
 
@@ -129,9 +132,11 @@ export default function LoginDesign3() {
           {/* Mobile Logo */}
           <div className="lg:hidden text-center mb-8">
             <div className="w-16 h-16 bg-[#0F4D39] rounded-full mx-auto mb-4 flex items-center justify-center p-2">
-              <img 
-                src="/LOGO TLG WHITE.svg" 
+              <Image 
+                src="/LOGO TLG WHITE (1).svg" 
                 alt="The Lodge Family Logo" 
+                width={48}
+                height={48}
                 className="w-full h-full object-contain"
               />
             </div>

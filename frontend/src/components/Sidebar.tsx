@@ -30,6 +30,15 @@ export default function Sidebar() {
       )
     },
     {
+      href: "/messages",
+      label: "Pesan",
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+      )
+    },
+    {
       href: "/exclusive-member",
       label: "Exclusive Member",
       icon: (
@@ -190,8 +199,20 @@ export default function Sidebar() {
               />
             </div>
             
-            {/* Hamburger menu di sisi kanan */}
-            <div className="flex items-center">
+            {/* Icon pesan dan hamburger menu di sisi kanan */}
+            <div className="flex items-center space-x-2">
+              {/* Icon Pesan */}
+              <Link
+                href="/messages"
+                className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#0F4D39]"
+              >
+                <span className="sr-only">Pesan</span>
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </Link>
+              
+              {/* Hamburger menu */}
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#0F4D39]"

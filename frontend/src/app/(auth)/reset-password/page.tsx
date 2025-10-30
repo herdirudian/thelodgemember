@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 
 export default function ResetPasswordPage() {
   return (
@@ -117,9 +118,11 @@ function ResetPasswordForm() {
           {/* Logo */}
           <div className="mb-8">
             <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm p-4">
-              <img 
-                src="/LOGO TLG WHITE.svg" 
+              <Image 
+                src="/LOGO TLG WHITE (1).svg" 
                 alt="The Lodge Family Logo" 
+                width={96}
+                height={96}
                 className="w-full h-full object-contain"
               />
             </div>
@@ -179,11 +182,13 @@ function ResetPasswordForm() {
           {/* Mobile Logo */}
           <div className="lg:hidden text-center mb-8">
             <div className="w-16 h-16 bg-[#0F4D39] rounded-full mx-auto mb-4 flex items-center justify-center p-2">
-              <img 
-                src="/LOGO TLG WHITE.svg" 
-                alt="The Lodge Family Logo" 
-                className="w-full h-full object-contain"
-              />
+              <Image 
+                  src="/LOGO TLG WHITE (1).svg" 
+                  alt="The Lodge Family Logo" 
+                  width={80}
+                  height={80}
+                  className="w-full h-full object-contain"
+                />
             </div>
             <h1 className="text-2xl font-bold text-gray-900">The Lodge Family</h1>
           </div>

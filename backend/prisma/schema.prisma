@@ -1,17 +1,17 @@
 // Prisma schema for The Lodge Family Membership System
-// Database: MySQL
+// Database: SQLite (for development)
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id        String   @id @default(uuid()) @db.Char(36)
+  id        String   @id @default(uuid())
   email     String   @unique
   password  String
   role      Role
@@ -28,7 +28,7 @@ model User {
 }
 
 model Member {
-  id                 String   @id @default(uuid()) @db.Char(36)
+  id                 String   @id @default(uuid())
   userId             String   @unique
   fullName           String
   phone              String
@@ -48,12 +48,13 @@ model Member {
   tourismTicketBookings TourismTicketBooking[]
   accommodationBookings AccommodationBooking[]
   benefitRedemptions BenefitRedemption[]
+  promoRegistrations PromoRegistration[]
   notifications      Notification[]
   user               User     @relation(fields: [userId], references: [id])
 }
 
 model RegistrationCode {
-  id        String   @id @default(uuid()) @db.Char(36)
+  id        String   @id @default(uuid())
   code      String   @unique
   isActive  Boolean  @default(true)
   expiresAt DateTime?
@@ -64,7 +65,7 @@ model RegistrationCode {
 }
 
 model Ticket {
-  id            String   @id @default(uuid()) @db.Char(36)
+  id            String   @id @default(uuid())
   memberId      String
   name          String
   validDate     DateTime
@@ -79,7 +80,7 @@ model Ticket {
 }
 
 model Event {
-  id            String   @id @default(uuid()) @db.Char(36)
+  id            String   @id @default(uuid())
   title         String
   description   String
   eventDate     DateTime
@@ -93,7 +94,7 @@ model Event {
 }
 
 model EventRegistration {
-  id            String   @id @default(uuid()) @db.Char(36)
+  id            String   @id @default(uuid())
   eventId       String
   memberId      String
   status        RegistrationStatus @default(REGISTERED)
@@ -106,7 +107,7 @@ model EventRegistration {
 }
 
 model PointRedemption {
-  id            String   @id @default(uuid()) @db.Char(36)
+  id            String   @id @default(uuid())
   memberId      String
   pointsUsed    Int
   rewardName    String
@@ -121,7 +122,7 @@ model PointRedemption {
 }
 
 model PointAdjustment {
-  id              String          @id @default(uuid()) @db.Char(36)
+  id              String          @id @default(uuid())
   memberId        String
   adminId         String
   adminName       String
@@ -135,7 +136,7 @@ model PointAdjustment {
 }
 
 model Announcement {
-  id          String   @id @default(uuid()) @db.Char(36)
+  id          String   @id @default(uuid())
   title       String
   description String
   imageUrl    String?
@@ -144,7 +145,7 @@ model Announcement {
 }
 
 model Benefit {
-  id          String   @id @default(uuid()) @db.Char(36)
+  id          String   @id @default(uuid())
   title       String
   description String
   imageUrl    String?
@@ -158,7 +159,7 @@ model Benefit {
 }
 
 model Promo {
-  id             String    @id @default(uuid()) @db.Char(36)
+  id             String    @id @default(uuid())
   title          String
   description    String
   startDate      DateTime
@@ -179,9 +180,10 @@ model Promo {
   // add back relation from PointRedemption
   pointRedemptions PointRedemption[]
   tickets        Ticket[]
+  promoRegistrations PromoRegistration[]
 }
 model SliderImage {
-  id          String   @id @default(uuid()) @db.Char(36)
+  id          String   @id @default(uuid())
   imageUrl    String
   title       String?
   description String?
@@ -226,7 +228,7 @@ enum AdjustmentType {
 }
 
 model RedeemHistory {
-  id           String      @id @default(uuid()) @db.Char(36)
+  id           String      @id @default(uuid())
   memberId     String
   memberName   String
   voucherType  VoucherType
@@ -256,7 +258,7 @@ enum PromoType {
 }
 
 model AdminActivity {
-  id          String     @id @default(uuid()) @db.Char(36)
+  id          String     @id @default(uuid())
   adminId     String
   adminName   String?
   adminRole   AdminRole?
@@ -271,7 +273,7 @@ model AdminActivity {
 }
 
 model TourismTicket {
-  id          String   @id @default(uuid()) @db.Char(36)
+  id          String   @id @default(uuid())
   name        String
   description String
   validDate   DateTime
@@ -293,7 +295,7 @@ model TourismTicket {
 }
 
 model Accommodation {
-  id           String   @id @default(uuid()) @db.Char(36)
+  id           String   @id @default(uuid())
   name         String
   description  String
   type         String
@@ -314,7 +316,7 @@ model Accommodation {
 
 // Payment and Booking Models
 model TourismTicketBooking {
-  id              String        @id @default(uuid()) @db.Char(36)
+  id              String        @id @default(uuid())
   ticketId        String
   memberId        String?       // Optional for guest bookings
   customerName    String
@@ -339,7 +341,7 @@ model TourismTicketBooking {
 }
 
 model AccommodationBooking {
-  id              String        @id @default(uuid()) @db.Char(36)
+  id              String        @id @default(uuid())
   accommodationId String
   memberId        String?       // Optional for guest bookings
   customerName    String
@@ -362,7 +364,7 @@ model AccommodationBooking {
 }
 
 model Payment {
-  id                    String        @id @default(uuid()) @db.Char(36)
+  id                    String        @id @default(uuid())
   xenditInvoiceId       String?       @unique
   xenditPaymentId       String?       @unique
   amount                Float
@@ -406,7 +408,7 @@ enum PaymentStatus {
 }
 
 model BenefitRedemption {
-  id            String   @id @default(uuid()) @db.Char(36)
+  id            String   @id @default(uuid())
   memberId      String
   benefitId     String
   voucherCode   String   @unique
@@ -428,7 +430,7 @@ model BenefitRedemption {
 
 // Notification System Models
 model Notification {
-  id          String           @id @default(uuid()) @db.Char(36)
+  id          String           @id @default(uuid())
   memberId    String
   title       String
   message     String
@@ -453,7 +455,7 @@ model Notification {
 }
 
 model AdminMessage {
-  id          String   @id @default(uuid()) @db.Char(36)
+  id          String   @id @default(uuid())
   title       String
   message     String
   imageUrl    String?
@@ -497,7 +499,7 @@ enum MessageTargetType {
 }
 
 model Settings {
-  id                String   @id @default(uuid()) @db.Char(36)
+  id                String   @id @default(uuid())
   // General
   appName           String   @default("The Lodge Family")
   defaultLocale     String   @default("id-ID")
@@ -529,4 +531,34 @@ model Settings {
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+}
+
+model PromoRegistration {
+  id            String   @id @default(uuid())
+  memberId      String
+  promoId       String
+  registrationId String  @unique // Unique registration ID for QR code
+  voucherCode   String   @unique // Friendly voucher code
+  qrCode        String   // QR code data URL
+  status        PromoVoucherStatus @default(ACTIVE)
+  isUsed        Boolean  @default(false)
+  usedAt        DateTime?
+  emailSent     Boolean  @default(false)
+  emailSentAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  member        Member   @relation(fields: [memberId], references: [id])
+  promo         Promo    @relation(fields: [promoId], references: [id])
+  
+  @@index([memberId])
+  @@index([promoId])
+  @@index([voucherCode])
+  @@index([registrationId])
+}
+
+enum PromoVoucherStatus {
+  ACTIVE
+  USED
+  EXPIRED
 }

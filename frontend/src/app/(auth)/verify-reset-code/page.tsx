@@ -118,7 +118,7 @@ function VerifyResetCodeForm() {
           <div className="mb-8">
             <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm p-4">
               <img 
-                src="/LOGO TLG WHITE.svg" 
+                src="/LOGO TLG WHITE (1).svg" 
                 alt="The Lodge Family Logo" 
                 className="w-full h-full object-contain"
               />
@@ -180,7 +180,7 @@ function VerifyResetCodeForm() {
           <div className="lg:hidden text-center mb-8">
             <div className="w-16 h-16 bg-[#0F4D39] rounded-full mx-auto mb-4 flex items-center justify-center p-2">
               <img 
-                src="/LOGO TLG WHITE.svg" 
+                src="/LOGO TLG WHITE (1).svg" 
                 alt="The Lodge Family Logo" 
                 className="w-full h-full object-contain"
               />

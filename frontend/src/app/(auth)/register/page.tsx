@@ -148,8 +148,8 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Left Side - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden" style={{
+      {/* Left Side - Branding - Hidden */}
+      <div className="hidden" style={{
         backgroundImage: 'url(/BG_TheLodge.svg)',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
@@ -163,7 +163,7 @@ export default function RegisterPage() {
            <div className="mb-8">
              <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm p-4">
                <img 
-                 src="/LOGO TLG WHITE.svg" 
+                 src="/LOGO TLG WHITE (1).svg" 
                  alt="The Lodge Family Logo" 
                  className="w-full h-full object-contain"
                />
@@ -218,7 +218,7 @@ export default function RegisterPage() {
       </div>
 
       {/* Right Side - Register Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
+      <div className="w-full flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <h1 className="text-2xl font-semibold text-[#0F4D39] mb-6">Daftar Member</h1>
         {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">{error}</div>}
