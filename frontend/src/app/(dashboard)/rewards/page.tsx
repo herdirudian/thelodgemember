@@ -172,15 +172,15 @@ export default function RewardsPage() {
   const getCategoryColor = (category: string) => {
     switch (category) {
       case 'voucher':
-        return 'text-blue-600 bg-blue-100 dark:bg-blue-900/20';
+        return 'text-blue-600 bg-blue-100';
       case 'discount':
-        return 'text-green-600 bg-green-100 dark:bg-green-900/20';
+        return 'text-green-600 bg-green-100';
       case 'merchandise':
-        return 'text-purple-600 bg-purple-100 dark:bg-purple-900/20';
+        return 'text-purple-600 bg-purple-100';
       case 'experience':
-        return 'text-yellow-600 bg-yellow-100 dark:bg-yellow-900/20';
+        return 'text-yellow-600 bg-yellow-100';
       default:
-        return 'text-gray-600 bg-gray-100 dark:bg-gray-900/20';
+        return 'text-gray-600 bg-gray-100';
     }
   };
 
@@ -193,83 +193,83 @@ export default function RewardsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Memuat rewards...</p>
+          <p className="text-gray-600">Memuat rewards...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-6">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-6">
           <Link 
-            href="/profile" 
-            className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mb-4"
+            href="/dashboard" 
+            className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-4"
           >
             <IconArrowLeft className="w-5 h-5 mr-2" />
-            Kembali ke Profil
+            Kembali ke Dashboard
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Rewards</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">Tukar poin Anda dengan berbagai reward menarik</p>
+          <h1 className="text-3xl font-bold text-gray-900">Rewards</h1>
+          <p className="text-gray-600 mt-2">Tukar poin Anda dengan berbagai reward menarik</p>
         </div>
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-            <p className="text-red-700 dark:text-red-400">{error}</p>
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-700">{error}</p>
           </div>
         )}
 
         {/* Points Summary */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+          <div className="bg-white rounded-xl shadow-md p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
-                <IconCoin className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <IconCoin className="w-6 h-6 text-blue-600" />
               </div>
-              <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">{userPoints.balance}</span>
+              <span className="text-2xl font-bold text-blue-600">{userPoints.balance}</span>
             </div>
-            <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Poin Tersedia</h3>
-            <p className="text-gray-600 dark:text-gray-400 text-sm">Poin yang dapat digunakan</p>
+            <h3 className="font-semibold text-gray-800 mb-2">Poin Tersedia</h3>
+            <p className="text-gray-600 text-sm">Poin yang dapat digunakan</p>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+          <div className="bg-white rounded-xl shadow-md p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">
-                <IconTrendingUp className="w-6 h-6 text-green-600 dark:text-green-400" />
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <IconTrendingUp className="w-6 h-6 text-green-600" />
               </div>
-              <span className="text-2xl font-bold text-green-600 dark:text-green-400">{userPoints.totalEarned}</span>
+              <span className="text-2xl font-bold text-green-600">{userPoints.totalEarned}</span>
             </div>
-            <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Total Diperoleh</h3>
-            <p className="text-gray-600 dark:text-gray-400 text-sm">Total poin yang diperoleh</p>
+            <h3 className="font-semibold text-gray-800 mb-2">Total Diperoleh</h3>
+            <p className="text-gray-600 text-sm">Total poin yang diperoleh</p>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+          <div className="bg-white rounded-xl shadow-md p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
-                <IconGift className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                <IconGift className="w-6 h-6 text-purple-600" />
               </div>
-              <span className="text-2xl font-bold text-purple-600 dark:text-purple-400">{userPoints.totalSpent}</span>
+              <span className="text-2xl font-bold text-purple-600">{userPoints.totalSpent}</span>
             </div>
-            <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Total Ditukar</h3>
-            <p className="text-gray-600 dark:text-gray-400 text-sm">Total poin yang ditukar</p>
+            <h3 className="font-semibold text-gray-800 mb-2">Total Ditukar</h3>
+            <p className="text-gray-600 text-sm">Total poin yang ditukar</p>
           </div>
         </div>
 
         {/* Filter Buttons */}
-        <div className="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-md p-4">
+        <div className="mb-6 bg-white rounded-xl shadow-md p-4">
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setFilter('all')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === 'all'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Semua
@@ -279,7 +279,7 @@ export default function RewardsPage() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === 'available'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Tersedia
@@ -289,7 +289,7 @@ export default function RewardsPage() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === 'affordable'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Terjangkau
@@ -299,7 +299,7 @@ export default function RewardsPage() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === 'voucher'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Voucher
@@ -309,7 +309,7 @@ export default function RewardsPage() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === 'discount'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Diskon
@@ -319,7 +319,7 @@ export default function RewardsPage() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === 'merchandise'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Merchandise
@@ -329,7 +329,7 @@ export default function RewardsPage() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === 'experience'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Experience

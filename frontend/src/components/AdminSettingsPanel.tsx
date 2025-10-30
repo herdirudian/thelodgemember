@@ -110,7 +110,7 @@ export default function AdminSettingsPanel() {
       className={`px-3 py-2 rounded-md text-sm font-medium border ${
         active === id
           ? "bg-[#0F4D39] text-white border-[#0F4D39]"
-          : "bg-white text-[#0F4D39] hover:bg-slate-100 dark:bg-gray-900 dark:text-white dark:hover:bg-gray-800 border-slate-200 dark:border-gray-800"
+          : "bg-white text-[#0F4D39] hover:bg-slate-100 border-slate-200"
       }`}
     >
       {label}
@@ -146,7 +146,7 @@ export default function AdminSettingsPanel() {
 
 function Section({ title, description }: { title: string; description?: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-gray-800 p-4">
+    <div className="rounded-lg border border-slate-200 p-4">
       <div className="text-lg font-semibold mb-1">{title}</div>
       {description && <div className="text-xs text-slate-600 mb-3">{description}</div>}
     </div>
@@ -171,18 +171,18 @@ function GeneralSettings() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <label className="block text-xs text-slate-600 mb-1">Nama Aplikasi</label>
-          <input value={appName} onChange={(e) => setAppName(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800" />
+          <input value={appName} onChange={(e) => setAppName(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 bg-white" />
         </div>
         <div>
           <label className="block text-xs text-slate-600 mb-1">Default Locale</label>
-          <select value={defaultLocale} onChange={(e) => setDefaultLocale(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <select value={defaultLocale} onChange={(e) => setDefaultLocale(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 bg-white">
             <option value="id-ID">Indonesia (id-ID)</option>
             <option value="en-US">English (en-US)</option>
           </select>
         </div>
         <div>
           <label className="block text-xs text-slate-600 mb-1">Time Zone</label>
-          <input value={timeZone} onChange={(e) => setTimeZone(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800" />
+          <input value={timeZone} onChange={(e) => setTimeZone(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 bg-white" />
         </div>
       </div>
       <div className="flex justify-end">
@@ -218,7 +218,7 @@ function BrandingSettings() {
         </div>
         <div>
           <label className="block text-xs text-slate-600 mb-1">Logo URL</label>
-          <input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800" />
+          <input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 bg-white" />
         </div>
       </div>
       <div className="flex justify-end">
@@ -250,7 +250,7 @@ function SecuritySettings() {
         </div>
         <div>
           <label className="block text-xs text-slate-600 mb-1">Session Timeout (menit)</label>
-          <input type="number" min={5} value={sessionTimeout} onChange={(e) => setSessionTimeout(parseInt(e.target.value) || 60)} className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800" />
+          <input type="number" min={5} value={sessionTimeout} onChange={(e) => setSessionTimeout(parseInt(e.target.value) || 60)} className="w-full px-3 py-2 rounded border border-slate-300 bg-white" />
         </div>
         <div className="flex items-center gap-2">
           <input id="allowDirectLogin" type="checkbox" checked={allowDirectLogin} onChange={(e) => setAllowDirectLogin(e.target.checked)} />
@@ -282,15 +282,15 @@ function EmailSettings() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <label className="block text-xs text-slate-600 mb-1">From Name</label>
-          <input value={fromName} onChange={(e) => setFromName(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800" />
+          <input value={fromName} onChange={(e) => setFromName(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 bg-white" />
         </div>
         <div>
           <label className="block text-xs text-slate-600 mb-1">From Email</label>
-          <input value={fromEmail} onChange={(e) => setFromEmail(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800" />
+          <input value={fromEmail} onChange={(e) => setFromEmail(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 bg-white" />
         </div>
         <div>
           <label className="block text-xs text-slate-600 mb-1">Provider</label>
-          <select value={provider} onChange={(e) => setProvider(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <select value={provider} onChange={(e) => setProvider(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 bg-white">
             <option value="smtp">SMTP</option>
             <option value="sendgrid">SendGrid</option>
             <option value="resend">Resend</option>
@@ -385,8 +385,8 @@ function IntegrationsSettings() {
       <Section title="Integrations" description="Integrasi layanan pihak ketiga." />
       
       {/* Cloudinary Section */}
-      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-        <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">Cloudinary</h4>
+      <div className="bg-gray-50 p-4 rounded-lg">
+        <h4 className="text-sm font-medium text-gray-900 mb-3">Cloudinary</h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="flex items-center gap-2">
             <input id="cloudinaryEnabled" type="checkbox" checked={cloudinaryEnabled} onChange={(e) => setCloudinaryEnabled(e.target.checked)} />
@@ -394,18 +394,18 @@ function IntegrationsSettings() {
           </div>
           <div>
             <label className="block text-xs text-slate-600 mb-1">Cloudinary Folder</label>
-            <input value={cloudinaryFolder} onChange={(e) => setCloudinaryFolder(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800" />
+            <input value={cloudinaryFolder} onChange={(e) => setCloudinaryFolder(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 bg-white" />
           </div>
           <div>
             <label className="block text-xs text-slate-600 mb-1">Webhook URL</label>
-            <input value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} placeholder="https://..." className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800" />
+            <input value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} placeholder="https://..." className="w-full px-3 py-2 rounded border border-slate-300 bg-white" />
           </div>
         </div>
       </div>
 
       {/* Xendit Payment Gateway Section */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-        <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">Xendit Payment Gateway</h4>
+      <div className="bg-blue-50 p-4 rounded-lg">
+        <h4 className="text-sm font-medium text-gray-900 mb-3">Xendit Payment Gateway</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-slate-600 mb-1">Secret Key</label>
@@ -414,7 +414,7 @@ function IntegrationsSettings() {
               value={xenditSecretKey} 
               onChange={(e) => setXenditSecretKey(e.target.value)} 
               placeholder="xnd_development_..." 
-              className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800" 
+              className="w-full px-3 py-2 rounded border border-slate-300 bg-white" 
             />
           </div>
           <div>
@@ -424,7 +424,7 @@ function IntegrationsSettings() {
               value={xenditPublicKey} 
               onChange={(e) => setXenditPublicKey(e.target.value)} 
               placeholder="xnd_public_development_..." 
-              className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800" 
+              className="w-full px-3 py-2 rounded border border-slate-300 bg-white" 
             />
           </div>
           <div>
@@ -434,7 +434,7 @@ function IntegrationsSettings() {
               value={xenditWebhookToken} 
               onChange={(e) => setXenditWebhookToken(e.target.value)} 
               placeholder="Webhook verification token" 
-              className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800" 
+              className="w-full px-3 py-2 rounded border border-slate-300 bg-white" 
             />
           </div>
           <div>
@@ -442,7 +442,7 @@ function IntegrationsSettings() {
             <select 
               value={xenditEnvironment} 
               onChange={(e) => setXenditEnvironment(e.target.value)} 
-              className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800"
+              className="w-full px-3 py-2 rounded border border-slate-300 bg-white"
             >
               <option value="test">Test</option>
               <option value="live">Live</option>
@@ -463,15 +463,15 @@ function IntegrationsSettings() {
           {xenditTestResult && (
             <div className={`flex-1 p-2 rounded text-xs ${
               xenditTestResult.success 
-                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200' 
-                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200'
+                ? 'bg-green-100 text-green-800' 
+                : 'bg-red-100 text-red-800'
             }`}>
               <strong>{xenditTestResult.success ? '✓' : '✗'}</strong> {xenditTestResult.message}
             </div>
           )}
         </div>
         
-        <div className="mt-3 p-3 bg-blue-100 dark:bg-blue-800/30 rounded text-xs text-blue-800 dark:text-blue-200">
+        <div className="mt-3 p-3 bg-blue-100 rounded text-xs text-blue-800">
           <strong>Info:</strong> Konfigurasi ini akan digunakan untuk memproses pembayaran. Pastikan menggunakan environment "test" untuk development dan "live" untuk production.
         </div>
       </div>
@@ -517,7 +517,7 @@ function MaintenanceSettings() {
         </div>
         <div className="md:col-span-2">
           <label className="block text-xs text-slate-600 mb-1">Pengumuman</label>
-          <textarea value={announcement} onChange={(e) => setAnnouncement(e.target.value)} rows={3} className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800" />
+          <textarea value={announcement} onChange={(e) => setAnnouncement(e.target.value)} rows={3} className="w-full px-3 py-2 rounded border border-slate-300 bg-white" />
         </div>
       </div>
       <div className="flex justify-end">

@@ -62,8 +62,8 @@ export default function QRCodeWidget({ memberData, className = "" }: QRCodeWidge
   if (!memberData) {
     return (
       <div className={`bg-white rounded-xl border border-gray-200 shadow p-4 ${className}`}>
-        <div className="text-center text-gray-500 dark:text-gray-400">
-          <div className="w-16 h-16 mx-auto mb-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+        <div className="text-center text-gray-500">
+          <div className="w-16 h-16 mx-auto mb-2 bg-gray-100 rounded-lg flex items-center justify-center">
             📱
           </div>
           <p className="text-sm">Member data tidak tersedia</p>
@@ -75,20 +75,20 @@ export default function QRCodeWidget({ memberData, className = "" }: QRCodeWidge
   return (
     <div className={`bg-white rounded-xl border border-gray-200 shadow ${className}`}>
       {/* Header */}
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-to-r from-[#0F4D39] to-emerald-500 rounded-lg flex items-center justify-center">
               <span className="text-white text-sm font-bold">QR</span>
             </div>
             <div>
-              <h3 className="font-semibold text-[#0F4D39] dark:text-emerald-400">Member QR Code</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Untuk check-in & redeem</p>
+              <h3 className="font-semibold text-[#0F4D39]">Member QR Code</h3>
+              <p className="text-xs text-gray-500">Untuk check-in & redeem</p>
             </div>
           </div>
           <button
             onClick={() => setShowDetails(!showDetails)}
-            className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
           >
             {showDetails ? 'Sembunyikan' : 'Detail'}
           </button>
@@ -107,7 +107,7 @@ export default function QRCodeWidget({ memberData, className = "" }: QRCodeWidge
               )}
               <canvas
                 ref={canvasRef}
-                className="border border-gray-200 dark:border-gray-600 rounded-lg"
+                className="border border-gray-200 rounded-lg"
                 style={{ maxWidth: '200px', height: 'auto' }}
               />
             </div>
@@ -115,17 +115,17 @@ export default function QRCodeWidget({ memberData, className = "" }: QRCodeWidge
 
           {/* Member Info */}
           <div className="text-center space-y-1">
-            <div className="font-medium text-[#0F4D39] dark:text-emerald-400">
+            <div className="font-medium text-[#0F4D39]">
               {memberData.fullName}
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-300">
+            <div className="text-sm text-gray-600">
               {memberData.membershipNumber || 'No Member'}
             </div>
             <div className="flex items-center justify-center gap-2">
               <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                 memberData.isLifetime 
-                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
-                  : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200'
+                  ? 'bg-purple-100 text-purple-800'
+                  : 'bg-emerald-100 text-emerald-800'
               }`}>
                 {memberData.isLifetime ? '👑 Lifetime' : `${memberData.level || 'Bronze'} Member`}
               </span>
@@ -134,8 +134,8 @@ export default function QRCodeWidget({ memberData, className = "" }: QRCodeWidge
 
           {/* Expandable Details */}
           {showDetails && (
-            <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-2">
-              <div className="text-xs text-gray-600 dark:text-gray-300">
+            <div className="mt-4 p-3 bg-gray-50 rounded-lg space-y-2">
+              <div className="text-xs text-gray-600">
                 <div className="flex justify-between">
                   <span>Points Balance:</span>
                   <span className="font-medium">{(memberData.pointsBalance || 0).toLocaleString('id-ID')}</span>
@@ -155,7 +155,7 @@ export default function QRCodeWidget({ memberData, className = "" }: QRCodeWidge
       </div>
 
       {/* Quick Actions */}
-      <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+      <div className="p-4 border-t border-gray-200">
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => {
@@ -189,7 +189,7 @@ export default function QRCodeWidget({ memberData, className = "" }: QRCodeWidge
                 alert('QR data copied to clipboard!');
               }
             }}
-            className="flex items-center justify-center gap-1 px-3 py-2 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            className="flex items-center justify-center gap-1 px-3 py-2 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
           >
             📤 Share
           </button>

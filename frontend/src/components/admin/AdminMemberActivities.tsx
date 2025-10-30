@@ -555,8 +555,8 @@ export default function AdminMemberActivities() {
   const Badge = ({ children, variant = 'default' }: { children: React.ReactNode; variant?: 'default' | 'secondary' }) => (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
       variant === 'secondary' 
-        ? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200' 
-        : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300'
+        ? 'bg-gray-100 text-gray-800'
+        : 'bg-emerald-100 text-emerald-800'
     }`}>
       {children}
     </span>
@@ -564,19 +564,19 @@ export default function AdminMemberActivities() {
 
   // Card components
   const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
-    <div className={`rounded-lg border border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-900 ${className}`}>
+    <div className={`rounded-lg border border-slate-200 bg-white ${className}`}>
       {children}
     </div>
   );
 
   const CardHeader = ({ children }: { children: React.ReactNode }) => (
-    <div className="px-6 py-4 border-b border-slate-200 dark:border-gray-800">
+    <div className="px-6 py-4 border-b border-slate-200">
       {children}
     </div>
   );
 
   const CardTitle = ({ children }: { children: React.ReactNode }) => (
-    <h3 className="text-lg font-semibold text-slate-900 dark:text-gray-100">
+    <h3 className="text-lg font-semibold text-slate-900">
       {children}
     </h3>
   );
@@ -599,7 +599,7 @@ export default function AdminMemberActivities() {
       onClick={onClick}
       className={`inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background ${
         variant === 'outline'
-          ? 'border border-slate-300 dark:border-gray-700 bg-transparent hover:bg-slate-100 dark:hover:bg-gray-800 text-slate-900 dark:text-gray-100'
+          ? 'border border-slate-300 bg-transparent hover:bg-slate-100 text-slate-900'
           : 'bg-emerald-600 text-white hover:bg-emerald-700'
       } ${
         size === 'sm' ? 'h-8 px-3 text-xs' : 'h-10 py-2 px-4 text-sm'
@@ -616,7 +616,7 @@ export default function AdminMemberActivities() {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
         <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-        <div className="relative bg-white dark:bg-gray-900 rounded-lg shadow-lg max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="relative bg-white rounded-lg shadow-lg max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
           {children}
         </div>
       </div>
@@ -625,7 +625,7 @@ export default function AdminMemberActivities() {
 
   // Tab components
   const TabsList = ({ children }: { children: React.ReactNode }) => (
-    <div className="inline-flex h-10 items-center justify-center rounded-md bg-slate-100 dark:bg-gray-800 p-1 text-slate-500 dark:text-gray-400">
+    <div className="inline-flex h-10 items-center justify-center rounded-md bg-slate-100 p-1 text-slate-500">
       {children}
     </div>
   );
@@ -640,8 +640,8 @@ export default function AdminMemberActivities() {
       onClick={onClick}
       className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
         active 
-          ? 'bg-white dark:bg-gray-700 text-slate-900 dark:text-gray-100 shadow-sm' 
-          : 'hover:bg-white/50 dark:hover:bg-gray-700/50'
+          ? 'bg-white text-slate-900 shadow-sm'
+        : 'hover:bg-white/50'
       }`}
     >
       {children}
@@ -658,8 +658,8 @@ export default function AdminMemberActivities() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-gray-100">Aktivitas Member</h1>
-          <p className="text-slate-600 dark:text-gray-400">Data member yang telah klaim benefit, ikut event, dan redeem poin</p>
+          <h1 className="text-2xl font-bold text-slate-900">Aktivitas Member</h1>
+        <p className="text-slate-600">Data member yang telah klaim benefit, ikut event, dan redeem poin</p>
         </div>
         <div className="flex items-center space-x-3">
           {/* Export Dropdown */}
@@ -674,23 +674,23 @@ export default function AdminMemberActivities() {
               <span className="text-xs">▼</span>
             </Button>
             {showExportMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-md shadow-lg z-10">
+              <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-md shadow-lg z-10">
                 <div className="py-1">
                   <button
                     onClick={() => handleExport('csv')}
-                    className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-gray-700"
+                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
                   >
                     📄 Export ke CSV
                   </button>
                   <button
                     onClick={() => handleExport('excel')}
-                    className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-gray-700"
+                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
                   >
                     📊 Export ke Excel
                   </button>
                   <button
                     onClick={() => handleExport('summary')}
-                    className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-gray-700"
+                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
                   >
                     📋 Export Ringkasan
                   </button>
@@ -706,8 +706,8 @@ export default function AdminMemberActivities() {
 
       {/* Error Message */}
       {error && (
-        <div className="px-4 py-3 rounded-md bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800">
-          <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
+        <div className="px-4 py-3 rounded-md bg-red-50 border border-red-200">
+          <p className="text-red-700 text-sm">{error}</p>
         </div>
       )}
 
@@ -716,12 +716,12 @@ export default function AdminMemberActivities() {
         <Card>
           <CardContent>
             <div className="flex items-center space-x-2">
-              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+              <div className="p-2 bg-blue-100 rounded-lg">
                 <div className="w-4 h-4 bg-blue-600 rounded"></div>
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-600 dark:text-gray-400">Total Member</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-gray-100">{summary.totalMembers}</p>
+                <p className="text-sm font-medium text-slate-600">Total Member</p>
+                <p className="text-2xl font-bold text-slate-900">{summary.totalMembers}</p>
               </div>
             </div>
           </CardContent>
@@ -730,12 +730,12 @@ export default function AdminMemberActivities() {
         <Card>
           <CardContent>
             <div className="flex items-center space-x-2">
-              <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+              <div className="p-2 bg-green-100 rounded-lg">
                 <div className="w-4 h-4 bg-green-600 rounded"></div>
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-600 dark:text-gray-400">Total Benefit</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-gray-100">{summary.totalBenefits}</p>
+                <p className="text-sm font-medium text-slate-600">Total Benefit</p>
+                <p className="text-2xl font-bold text-slate-900">{summary.totalBenefits}</p>
               </div>
             </div>
           </CardContent>
@@ -744,12 +744,12 @@ export default function AdminMemberActivities() {
         <Card>
           <CardContent>
             <div className="flex items-center space-x-2">
-              <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+              <div className="p-2 bg-purple-100 rounded-lg">
                 <div className="w-4 h-4 bg-purple-600 rounded"></div>
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-600 dark:text-gray-400">Total Event</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-gray-100">{summary.totalEvents}</p>
+                <p className="text-sm font-medium text-slate-600">Total Event</p>
+                <p className="text-2xl font-bold text-slate-900">{summary.totalEvents}</p>
               </div>
             </div>
           </CardContent>
@@ -758,12 +758,12 @@ export default function AdminMemberActivities() {
         <Card>
           <CardContent>
             <div className="flex items-center space-x-2">
-              <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
+              <div className="p-2 bg-orange-100 rounded-lg">
                 <div className="w-4 h-4 bg-orange-600 rounded"></div>
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-600 dark:text-gray-400">Total Redeem</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-gray-100">{summary.totalRedemptions}</p>
+                <p className="text-sm font-medium text-slate-600">Total Redeem</p>
+                <p className="text-2xl font-bold text-slate-900">{summary.totalRedemptions}</p>
               </div>
             </div>
           </CardContent>
@@ -772,12 +772,12 @@ export default function AdminMemberActivities() {
         <Card>
           <CardContent>
             <div className="flex items-center space-x-2">
-              <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
+              <div className="p-2 bg-emerald-100 rounded-lg">
                 <div className="w-4 h-4 bg-emerald-600 rounded"></div>
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-600 dark:text-gray-400">Total Aktivitas</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-gray-100">{summary.totalActivities}</p>
+                <p className="text-sm font-medium text-slate-600">Total Aktivitas</p>
+                <p className="text-2xl font-bold text-slate-900">{summary.totalActivities}</p>
               </div>
             </div>
           </CardContent>
@@ -788,14 +788,14 @@ export default function AdminMemberActivities() {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-slate-700 dark:text-gray-300">Tampilan:</span>
-            <div className="flex rounded-lg border border-slate-300 dark:border-gray-700 p-1">
+            <span className="text-sm font-medium text-slate-700">Tampilan:</span>
+            <div className="flex rounded-lg border border-slate-300 p-1">
               <button
                 onClick={() => setViewMode('summary')}
                 className={`px-3 py-1 text-sm rounded-md transition-colors ${
                   viewMode === 'summary'
                     ? 'bg-emerald-600 text-white'
-                    : 'text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-gray-100'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 📊 Ringkasan Member
@@ -805,7 +805,7 @@ export default function AdminMemberActivities() {
                 className={`px-3 py-1 text-sm rounded-md transition-colors ${
                   viewMode === 'activities'
                     ? 'bg-emerald-600 text-white'
-                    : 'text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-gray-100'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 📋 Aktivitas per Klaim
@@ -825,13 +825,13 @@ export default function AdminMemberActivities() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {/* Activity Type Filter */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Jenis Aktivitas
                 </label>
                 <select
                   value={filters.type}
                   onChange={(e) => updateFilter('type', e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-slate-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
                   <option value="all">Semua Aktivitas</option>
                   <option value="benefit">🎁 Benefit</option>
@@ -843,13 +843,13 @@ export default function AdminMemberActivities() {
 
               {/* Date Range Filter */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Periode Waktu
                 </label>
                 <select
                   value={filters.dateRange}
                   onChange={(e) => updateFilter('dateRange', e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-slate-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
                   <option value="all">Semua Waktu</option>
                   <option value="today">Hari Ini</option>
@@ -863,25 +863,25 @@ export default function AdminMemberActivities() {
               {filters.dateRange === 'custom' && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
                       Tanggal Mulai
                     </label>
                     <input
                       type="date"
                       value={filters.customStartDate}
                       onChange={(e) => updateFilter('customStartDate', e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-slate-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
                       Tanggal Selesai
                     </label>
                     <input
                       type="date"
                       value={filters.customEndDate}
                       onChange={(e) => updateFilter('customEndDate', e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-slate-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
                 </>
@@ -889,7 +889,7 @@ export default function AdminMemberActivities() {
 
               {/* Member Filter */}
               <div className={filters.dateRange === 'custom' ? 'md:col-span-2' : ''}>
-                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Cari Member
                 </label>
                 <input
@@ -897,14 +897,14 @@ export default function AdminMemberActivities() {
                   placeholder="Nama atau email member..."
                   value={filters.member}
                   onChange={(e) => updateFilter('member', e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-slate-900 dark:text-gray-100 placeholder-slate-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
             </div>
 
             {/* Filter Summary */}
             <div className="mt-4 flex items-center justify-between">
-              <div className="text-sm text-slate-600 dark:text-gray-400">
+              <div className="text-sm text-slate-600">
                 Menampilkan {filteredActivities.length} dari {activities.length} aktivitas
               </div>
               <Button
@@ -935,7 +935,7 @@ export default function AdminMemberActivities() {
             {filteredActivities.length > 0 ? (
               <div className="space-y-3">
                 {filteredActivities.map((activity) => (
-                  <div key={activity.id} className="p-4 border border-slate-200 dark:border-gray-700 rounded-lg hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors">
+                  <div key={activity.id} className="p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-2">
@@ -955,13 +955,13 @@ export default function AdminMemberActivities() {
                             </Badge>
                           )}
                         </div>
-                        <h4 className="font-medium text-slate-900 dark:text-gray-100 mb-1">
+                        <h4 className="font-medium text-slate-900 mb-1">
                           {activity.title}
                         </h4>
-                        <p className="text-sm text-slate-600 dark:text-gray-400 mb-2">
+                        <p className="text-sm text-slate-600 mb-2">
                           {activity.description}
                         </p>
-                        <div className="flex items-center space-x-4 text-xs text-slate-500 dark:text-gray-500">
+                        <div className="flex items-center space-x-4 text-xs text-slate-500">
                           <span>👤 {activity.memberName}</span>
                           <span>📧 {activity.memberEmail}</span>
                           <span>📅 {new Date(activity.date).toLocaleDateString('id-ID', {
@@ -982,7 +982,7 @@ export default function AdminMemberActivities() {
               </div>
             ) : (
               <div className="text-center py-8">
-                <p className="text-slate-500 dark:text-gray-400">
+                <p className="text-slate-500">
                   Tidak ada aktivitas yang sesuai dengan filter
                 </p>
               </div>
@@ -1009,34 +1009,34 @@ export default function AdminMemberActivities() {
                   placeholder="Cari member berdasarkan nama, email, atau telepon..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-slate-300 dark:border-gray-700 rounded-md leading-5 bg-white dark:bg-gray-800 placeholder-slate-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-slate-400 dark:focus:placeholder-gray-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                  className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-md leading-5 bg-white placeholder-slate-500 focus:outline-none focus:placeholder-slate-400 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
                 />
               </div>
             </div>
 
             {/* Table */}
-            <div className="rounded-md border border-slate-200 dark:border-gray-800 overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200 dark:divide-gray-800">
-                <thead className="bg-slate-50 dark:bg-gray-800">
+            <div className="rounded-md border border-slate-200 overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider">Member</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider">Tipe</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider">Poin</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider">Benefit</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider">Event</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider">Poin Ditukar</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider">Total Aktivitas</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wider">Aksi</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Member</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Tipe</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Poin</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Benefit</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Event</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Poin Ditukar</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Total Aktivitas</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Aksi</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-gray-900 divide-y divide-slate-200 dark:divide-gray-800">
+                <tbody className="bg-white divide-y divide-slate-200">
                   {filteredMembers.map((member) => (
                     <tr key={member.id}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <p className="font-medium text-slate-900 dark:text-gray-100">{member.fullName}</p>
-                          <p className="text-sm text-slate-500 dark:text-gray-400">{member.email}</p>
-                          <p className="text-sm text-slate-500 dark:text-gray-400">{member.phone}</p>
+                          <p className="font-medium text-slate-900">{member.fullName}</p>
+                          <p className="text-sm text-slate-500">{member.email}</p>
+                          <p className="text-sm text-slate-500">{member.phone}</p>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -1044,7 +1044,7 @@ export default function AdminMemberActivities() {
                           {member.isLifetime ? 'Lifetime' : 'Regular'}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 dark:text-gray-100">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
                         {member.pointsBalance}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -1084,7 +1084,7 @@ export default function AdminMemberActivities() {
 
             {filteredMembers.length === 0 && (
               <div className="text-center py-8">
-                <p className="text-slate-500 dark:text-gray-400">Tidak ada member yang ditemukan</p>
+                <p className="text-slate-500">Tidak ada member yang ditemukan</p>
               </div>
             )}
           </CardContent>
@@ -1093,8 +1093,8 @@ export default function AdminMemberActivities() {
 
       {/* Details Modal */}
       <Modal open={detailsOpen} onClose={() => setDetailsOpen(false)}>
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-gray-800">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-gray-100">
+        <div className="px-6 py-4 border-b border-slate-200">
+          <h2 className="text-lg font-semibold text-slate-900">
             Detail Aktivitas - {selectedMember?.fullName}
           </h2>
         </div>
@@ -1102,25 +1102,25 @@ export default function AdminMemberActivities() {
           {selectedMember && (
             <div>
               {/* Member Info */}
-              <div className="mb-6 p-4 bg-slate-50 dark:bg-gray-800 rounded-lg">
+              <div className="mb-6 p-4 bg-slate-50 rounded-lg">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm font-medium text-slate-600 dark:text-gray-400">Email</p>
-                    <p className="text-slate-900 dark:text-gray-100">{selectedMember.email}</p>
+                    <p className="text-sm font-medium text-slate-600">Email</p>
+                    <p className="text-slate-900">{selectedMember.email}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-slate-600 dark:text-gray-400">Telepon</p>
-                    <p className="text-slate-900 dark:text-gray-100">{selectedMember.phone}</p>
+                    <p className="text-sm font-medium text-slate-600">Telepon</p>
+                    <p className="text-slate-900">{selectedMember.phone}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-slate-600 dark:text-gray-400">Tipe Member</p>
+                    <p className="text-sm font-medium text-slate-600">Tipe Member</p>
                     <Badge variant={selectedMember.isLifetime ? "default" : "secondary"}>
                       {selectedMember.isLifetime ? 'Lifetime' : 'Regular'}
                     </Badge>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-slate-600 dark:text-gray-400">Poin Saat Ini</p>
-                    <p className="text-slate-900 dark:text-gray-100">{selectedMember.pointsBalance}</p>
+                    <p className="text-sm font-medium text-slate-600">Poin Saat Ini</p>
+                    <p className="text-slate-900">{selectedMember.pointsBalance}</p>
                   </div>
                 </div>
               </div>
@@ -1162,11 +1162,11 @@ export default function AdminMemberActivities() {
                   {selectedMember.activities.claimedBenefits.count > 0 ? (
                     <div className="space-y-3">
                       {selectedMember.activities.claimedBenefits.items.map((benefit, index) => (
-                        <div key={index} className="p-4 border border-slate-200 dark:border-gray-700 rounded-lg">
+                        <div key={index} className="p-4 border border-slate-200 rounded-lg">
                           <div className="flex justify-between items-start">
                             <div>
-                              <h4 className="font-medium text-slate-900 dark:text-gray-100">{benefit.name}</h4>
-                              <p className="text-xs text-slate-500 dark:text-gray-500 mt-2">
+                              <h4 className="font-medium text-slate-900">{benefit.name}</h4>
+                              <p className="text-xs text-slate-500 mt-2">
                                 Diklaim: {new Date(benefit.claimedAt).toLocaleDateString('id-ID')}
                               </p>
                             </div>
@@ -1178,7 +1178,7 @@ export default function AdminMemberActivities() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-slate-500 dark:text-gray-400">Belum ada benefit yang diklaim</p>
+                    <p className="text-slate-500">Belum ada benefit yang diklaim</p>
                   )}
                 </TabsContent>
 
@@ -1186,14 +1186,14 @@ export default function AdminMemberActivities() {
                   {selectedMember.activities.joinedEvents.count > 0 ? (
                     <div className="space-y-3">
                       {selectedMember.activities.joinedEvents.items.map((event, index) => (
-                        <div key={index} className="p-4 border border-slate-200 dark:border-gray-700 rounded-lg">
+                        <div key={index} className="p-4 border border-slate-200 rounded-lg">
                           <div className="flex justify-between items-start">
                             <div>
-                              <h4 className="font-medium text-slate-900 dark:text-gray-100">{event.eventTitle}</h4>
-                              <p className="text-xs text-slate-500 dark:text-gray-500 mt-2">
+                              <h4 className="font-medium text-slate-900">{event.eventTitle}</h4>
+                              <p className="text-xs text-slate-500 mt-2">
                                 Tanggal Event: {new Date(event.eventDate).toLocaleDateString('id-ID')}
                               </p>
-                              <p className="text-xs text-slate-500 dark:text-gray-500">
+                              <p className="text-xs text-slate-500">
                                 Bergabung: {new Date(event.registeredAt).toLocaleDateString('id-ID')}
                               </p>
                             </div>
@@ -1205,7 +1205,7 @@ export default function AdminMemberActivities() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-slate-500 dark:text-gray-400">Belum ada event yang diikuti</p>
+                    <p className="text-slate-500">Belum ada event yang diikuti</p>
                   )}
                 </TabsContent>
 
@@ -1213,14 +1213,14 @@ export default function AdminMemberActivities() {
                   {selectedMember.activities.redeemedPoints.count > 0 ? (
                     <div className="space-y-3">
                       {selectedMember.activities.redeemedPoints.items.map((redemption, index) => (
-                        <div key={index} className="p-4 border border-slate-200 dark:border-gray-700 rounded-lg">
+                        <div key={index} className="p-4 border border-slate-200 rounded-lg">
                           <div className="flex justify-between items-start">
                             <div>
-                              <h4 className="font-medium text-slate-900 dark:text-gray-100">{redemption.rewardName}</h4>
-                              <p className="text-sm text-slate-600 dark:text-gray-400 mt-1">
+                              <h4 className="font-medium text-slate-900">{redemption.rewardName}</h4>
+                              <p className="text-sm text-slate-600 mt-1">
                                 Poin digunakan: {redemption.pointsUsed}
                               </p>
-                              <p className="text-xs text-slate-500 dark:text-gray-500 mt-2">
+                              <p className="text-xs text-slate-500 mt-2">
                                 Ditukar: {new Date(redemption.redeemedAt).toLocaleDateString('id-ID')}
                               </p>
                             </div>
@@ -1232,7 +1232,7 @@ export default function AdminMemberActivities() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-slate-500 dark:text-gray-400">Belum ada poin yang ditukar</p>
+                    <p className="text-slate-500">Belum ada poin yang ditukar</p>
                   )}
                 </TabsContent>
 
@@ -1240,14 +1240,14 @@ export default function AdminMemberActivities() {
                   {selectedMember.activities.redeemHistory.count > 0 ? (
                     <div className="space-y-3">
                       {selectedMember.activities.redeemHistory.items.map((history, index) => (
-                        <div key={index} className="p-4 border border-slate-200 dark:border-gray-700 rounded-lg">
+                        <div key={index} className="p-4 border border-slate-200 rounded-lg">
                           <div className="flex justify-between items-start">
                             <div>
-                              <h4 className="font-medium text-slate-900 dark:text-gray-100">{history.voucherLabel}</h4>
-                              <p className="text-sm text-slate-600 dark:text-gray-400 mt-1">
+                              <h4 className="font-medium text-slate-900">{history.voucherLabel}</h4>
+                              <p className="text-sm text-slate-600 mt-1">
                                 Tipe: {history.voucherType}
                               </p>
-                              <p className="text-xs text-slate-500 dark:text-gray-500 mt-2">
+                              <p className="text-xs text-slate-500 mt-2">
                                 {new Date(history.redeemedAt).toLocaleDateString('id-ID')} - oleh {history.adminName}
                               </p>
                             </div>
@@ -1259,7 +1259,7 @@ export default function AdminMemberActivities() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-slate-500 dark:text-gray-400">Belum ada riwayat redeem</p>
+                    <p className="text-slate-500">Belum ada riwayat redeem</p>
                   )}
                 </TabsContent>
               </div>

@@ -111,8 +111,8 @@ export default function AdminActivities() {
 
   // Style tombol quick filter
   const quickBtnClass = (active: boolean) => active
-    ? "px-2 py-1 rounded-md bg-slate-900 text-white dark:bg-gray-200 dark:text-gray-900 text-xs"
-    : "px-2 py-1 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 text-xs";
+    ? "px-2 py-1 rounded-md bg-slate-900 text-white text-xs"
+    : "px-2 py-1 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 text-xs";
 
   return (
     <div className="space-y-3">
@@ -124,23 +124,23 @@ export default function AdminActivities() {
           <button className={quickBtnClass(quickRange === 'TODAY')} onClick={() => applyQuickRange('TODAY')}>Today</button>
           <button className={quickBtnClass(quickRange === '7D')} onClick={() => applyQuickRange('7D')}>7d</button>
           <button className={quickBtnClass(quickRange === '30D')} onClick={() => applyQuickRange('30D')}>30d</button>
-          <button className="px-2 py-1 rounded-md text-xs bg-slate-200 text-slate-700 dark:bg-gray-800 dark:text-gray-200" onClick={clearQuickRange}>Reset</button>
+          <button className="px-2 py-1 rounded-md text-xs bg-slate-200 text-slate-700" onClick={clearQuickRange}>Reset</button>
         </div>
         <div>
           <label className="block text-xs text-slate-600 mb-1">Dari</label>
-          <input type="datetime-local" value={start} onChange={(e) => { setQuickRange('NONE'); setStart(e.target.value); }} className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800" />
+          <input type="datetime-local" value={start} onChange={(e) => { setQuickRange('NONE'); setStart(e.target.value); }} className="w-full px-3 py-2 rounded border border-slate-300 bg-white" />
         </div>
         <div>
           <label className="block text-xs text-slate-600 mb-1">Sampai</label>
-          <input type="datetime-local" value={end} onChange={(e) => { setQuickRange('NONE'); setEnd(e.target.value); }} className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800" />
+          <input type="datetime-local" value={end} onChange={(e) => { setQuickRange('NONE'); setEnd(e.target.value); }} className="w-full px-3 py-2 rounded border border-slate-300 bg-white" />
         </div>
         <div>
           <label className="block text-xs text-slate-600 mb-1">Admin ID</label>
-          <input value={adminId} onChange={(e) => setAdminId(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800" />
+          <input value={adminId} onChange={(e) => setAdminId(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 bg-white" />
         </div>
         <div>
           <label className="block text-xs text-slate-600 mb-1">Method</label>
-          <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full px-3 py-2 rounded border border-slate-300 bg-white">
             <option value="ALL">Semua</option>
             <option value="GET">GET</option>
             <option value="POST">POST</option>
@@ -166,7 +166,7 @@ export default function AdminActivities() {
           </div>
         </div>
         <div className="flex items-end">
-          <button onClick={() => load()} className="px-3 py-2 rounded-md bg-slate-200 text-slate-700 dark:bg-gray-800 dark:text-gray-200">Terapkan</button>
+          <button onClick={() => load()} className="px-3 py-2 rounded-md bg-slate-200 text-slate-700">Terapkan</button>
         </div>
       </div>
 
@@ -174,10 +174,10 @@ export default function AdminActivities() {
       {error && <div className="text-xs text-red-600">{error}</div>}
 
       {/* Activities table */}
-      <div className="rounded-lg border border-slate-200 dark:border-gray-800 overflow-x-auto">
+      <div className="rounded-lg border border-slate-200 overflow-x-auto">
         <div className="px-4 py-2 text-sm font-semibold">Aktivitas Admin</div>
-        <table className="min-w-full divide-y divide-slate-200 dark:divide-gray-800">
-          <thead className="bg-slate-50 dark:bg-gray-800">
+        <table className="min-w-full divide-y divide-slate-200">
+          <thead className="bg-slate-50">
             <tr>
               <th className="px-4 py-2 text-left text-xs font-medium text-slate-600">Waktu</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-slate-600">Admin</th>
@@ -188,7 +188,7 @@ export default function AdminActivities() {
               <th className="px-4 py-2 text-left text-xs font-medium text-slate-600">Aksi</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200 dark:divide-gray-800">
+          <tbody className="divide-y divide-slate-200">
             {displayed.length === 0 && (
               <tr><td colSpan={7} className="px-4 py-6 text-center text-slate-500">Belum ada data.</td></tr>
             )}
@@ -207,7 +207,7 @@ export default function AdminActivities() {
                   ) : ("-")}
                 </td>
                 <td className="px-4 py-2 text-xs">
-                  <button onClick={() => setSelected(a)} className="px-2 py-1 text-xs rounded bg-slate-200 dark:bg-gray-800">Detail</button>
+                  <button onClick={() => setSelected(a)} className="px-2 py-1 text-xs rounded bg-slate-200">Detail</button>
                 </td>
               </tr>
             ))}
@@ -218,7 +218,7 @@ export default function AdminActivities() {
       {/* Detail modal */}
       {selected && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setSelected(null)}>
-          <div className="bg-white dark:bg-gray-900 rounded-lg w-full max-w-2xl p-4 border border-slate-200 dark:border-gray-800" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-lg w-full max-w-2xl p-4 border border-slate-200" onClick={(e) => e.stopPropagation()}>
             <div className="text-lg font-semibold mb-2">Detail Aktivitas</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
@@ -261,15 +261,15 @@ export default function AdminActivities() {
               </div>
               <div className="md:col-span-2">
                 <div className="text-xs font-semibold mt-2">Request Body</div>
-                <pre className="text-xs p-2 rounded bg-slate-100 dark:bg-gray-800 overflow-auto max-h-40">{JSON.stringify(selected.requestBody ?? {}, null, 2)}</pre>
+                <pre className="text-xs p-2 rounded bg-slate-100 overflow-auto max-h-40">{JSON.stringify(selected.requestBody ?? {}, null, 2)}</pre>
               </div>
               <div className="md:col-span-2">
                 <div className="text-xs font-semibold">Query</div>
-                <pre className="text-xs p-2 rounded bg-slate-100 dark:bg-gray-800 overflow-auto max-h-40">{JSON.stringify(selected.query ?? {}, null, 2)}</pre>
+                <pre className="text-xs p-2 rounded bg-slate-100 overflow-auto max-h-40">{JSON.stringify(selected.query ?? {}, null, 2)}</pre>
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-3">
-              <button onClick={() => setSelected(null)} className="px-3 py-2 rounded-md bg-slate-200 text-slate-700 dark:bg-gray-800 dark:text-gray-200">Tutup</button>
+              <button onClick={() => setSelected(null)} className="px-3 py-2 rounded-md bg-slate-200 text-slate-700">Tutup</button>
             </div>
           </div>
         </div>
@@ -289,10 +289,10 @@ const statusToSeverity = (status?: number): 'info' | 'warning' | 'error' => {
 const severityClass = (severity: string) => {
   switch (severity) {
     case "error":
-      return "inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-200 dark:border-red-800/60";
+      return "inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200";
     case "warning":
-      return "inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-800/60";
+      return "inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200";
     default:
-      return "inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700";
+      return "inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200";
   }
 };

@@ -123,19 +123,8 @@ export default function SettingsPage() {
 
   const applyTheme = (theme: string) => {
     const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else if (theme === 'light') {
-      root.classList.remove('dark');
-    } else {
-      // System theme
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (prefersDark) {
-        root.classList.add('dark');
-      } else {
-        root.classList.remove('dark');
-      }
-    }
+    // Always force light mode - remove dark class regardless of theme setting
+    root.classList.remove('dark');
   };
 
   const handleLogout = () => {
@@ -187,11 +176,9 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Memuat pengaturan...</p>
-        </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <p className="text-gray-600">Memuat pengaturan...</p>
       </div>
     );
   }
@@ -203,62 +190,62 @@ export default function SettingsPage() {
         <div className="mb-6">
           <Link 
             href="/profile" 
-            className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mb-4"
+            className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-4"
           >
             <IconArrowLeft className="w-5 h-5 mr-2" />
             Kembali ke Profil
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Pengaturan</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">Kelola preferensi dan pengaturan akun Anda</p>
+          <h1 className="text-3xl font-bold text-gray-900">Pengaturan</h1>
+          <p className="text-gray-600 mt-2">Kelola preferensi dan pengaturan akun Anda</p>
         </div>
 
         {/* Alert Messages */}
         {error && (
-          <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-            <p className="text-red-700 dark:text-red-400">{error}</p>
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-700">{error}</p>
           </div>
         )}
 
         {success && (
-          <div className="mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-            <p className="text-green-700 dark:text-green-400">{success}</p>
+          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+            <p className="text-green-700">{success}</p>
           </div>
         )}
 
         <div className="space-y-6">
           {/* Account Information */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <IconUser className="w-5 h-5" />
               Informasi Akun
             </h2>
             
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-3">
                   <IconMail className="w-5 h-5 text-gray-500" />
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-white">Email</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{userData?.email}</p>
+                    <p className="font-medium text-gray-900">Email</p>
+                    <p className="text-sm text-gray-600">{userData?.email}</p>
                   </div>
                 </div>
                 <Link 
                   href="/profile/edit"
-                  className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm font-medium"
+                  className="text-blue-600 hover:text-blue-700 text-sm font-medium"
                 >
                   Edit Profil
                 </Link>
               </div>
 
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-3">
                   <IconKey className="w-5 h-5 text-gray-500" />
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-white">Password</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Terakhir diubah 30 hari yang lalu</p>
+                    <p className="font-medium text-gray-900">Password</p>
+                    <p className="text-sm text-gray-600">Terakhir diubah 30 hari yang lalu</p>
                   </div>
                 </div>
-                <button className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm font-medium">
+                <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
                   Ubah Password
                 </button>
               </div>
@@ -266,37 +253,31 @@ export default function SettingsPage() {
           </div>
 
           {/* Theme Settings */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <IconSun className="w-5 h-5" />
               Tema
             </h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               {[
-                { value: 'light', label: 'Terang', icon: IconSun },
-                { value: 'dark', label: 'Gelap', icon: IconMoon },
-                { value: 'system', label: 'Sistem', icon: IconShield }
+                { value: 'light', label: 'Terang', icon: IconSun }
               ].map(({ value, label, icon: Icon }) => (
                 <button
                   key={value}
                   onClick={() => setSettings(prev => ({ ...prev, theme: value as any }))}
-                  className={`p-4 rounded-lg border-2 transition-colors ${
-                    settings.theme === value
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                  }`}
+                  className="p-4 rounded-lg border-2 transition-colors border-blue-500 bg-blue-50"
                 >
-                  <Icon className="w-6 h-6 mx-auto mb-2 text-gray-700 dark:text-gray-300" />
-                  <p className="font-medium text-gray-900 dark:text-white">{label}</p>
+                  <Icon className="w-6 h-6 mx-auto mb-2 text-gray-700" />
+                  <p className="font-medium text-gray-900">{label}</p>
                 </button>
               ))}
             </div>
           </div>
 
           {/* Notification Settings */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <IconBell className="w-5 h-5" />
               Notifikasi
             </h2>
@@ -307,17 +288,23 @@ export default function SettingsPage() {
                 { key: 'push', label: 'Push Notifikasi', description: 'Terima notifikasi push di browser' },
                 { key: 'marketing', label: 'Email Marketing', description: 'Terima email promosi dan penawaran' }
               ].map(({ key, label, description }) => (
-                <div key={key} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div key={key} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-white">{label}</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{description}</p>
+                    <p className="font-medium text-gray-900">{label}</p>
+                    <p className="text-sm text-gray-600">{description}</p>
                   </div>
                   <button
-                    onClick={() => updateNotificationSetting(key as any, !settings.notifications[key as keyof typeof settings.notifications])}
+                    onClick={() => setSettings(prev => ({
+                      ...prev,
+                      notifications: {
+                        ...prev.notifications,
+                        [key]: !prev.notifications[key as keyof typeof prev.notifications]
+                      }
+                    }))}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                       settings.notifications[key as keyof typeof settings.notifications]
                         ? 'bg-blue-600'
-                        : 'bg-gray-200 dark:bg-gray-600'
+                        : 'bg-gray-200'
                     }`}
                   >
                     <span
@@ -334,28 +321,34 @@ export default function SettingsPage() {
           </div>
 
           {/* Privacy Settings */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <IconShield className="w-5 h-5" />
               Privasi
             </h2>
             
             <div className="space-y-4">
               {[
-                { key: 'profileVisible', label: 'Profil Publik', description: 'Izinkan orang lain melihat profil Anda' },
+                { key: 'profileVisible', label: 'Profil Publik', description: 'Tampilkan profil Anda kepada member lain' },
                 { key: 'activityVisible', label: 'Aktivitas Publik', description: 'Tampilkan aktivitas Anda kepada member lain' }
               ].map(({ key, label, description }) => (
-                <div key={key} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div key={key} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-white">{label}</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{description}</p>
+                    <p className="font-medium text-gray-900">{label}</p>
+                    <p className="text-sm text-gray-600">{description}</p>
                   </div>
                   <button
-                    onClick={() => updatePrivacySetting(key as any, !settings.privacy[key as keyof typeof settings.privacy])}
+                    onClick={() => setSettings(prev => ({
+                      ...prev,
+                      privacy: {
+                        ...prev.privacy,
+                        [key]: !prev.privacy[key as keyof typeof prev.privacy]
+                      }
+                    }))}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                       settings.privacy[key as keyof typeof settings.privacy]
                         ? 'bg-blue-600'
-                        : 'bg-gray-200 dark:bg-gray-600'
+                        : 'bg-gray-200'
                     }`}
                   >
                     <span
@@ -372,8 +365,8 @@ export default function SettingsPage() {
           </div>
 
           {/* Language Settings */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <IconLanguage className="w-5 h-5" />
               Bahasa
             </h2>
@@ -381,16 +374,16 @@ export default function SettingsPage() {
             <select
               value={settings.language}
               onChange={(e) => setSettings(prev => ({ ...prev, language: e.target.value }))}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
             >
               <option value="id">Bahasa Indonesia</option>
               <option value="en">English</option>
             </select>
           </div>
 
-          {/* Action Buttons */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Aksi</h2>
+          {/* Actions */}
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Aksi</h2>
             
             <div className="space-y-4">
               <button
@@ -432,30 +425,30 @@ export default function SettingsPage() {
 
         {/* Delete Confirmation Modal */}
         {showDeleteConfirm && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Konfirmasi Hapus Akun
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Apakah Anda yakin ingin menghapus akun? Tindakan ini tidak dapat dibatalkan dan semua data Anda akan hilang.
-              </p>
-              <div className="flex gap-4">
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-2"
-                >
-                  <IconX className="w-4 h-4" />
-                  Batal
-                </button>
-                <button
-                  onClick={handleDeleteAccount}
-                  className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <IconTrash className="w-4 h-4" />
-                  Hapus
-                </button>
-              </div>
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                 Hapus Akun
+               </h3>
+               <p className="text-gray-600 mb-6">
+                 Apakah Anda yakin ingin menghapus akun? Tindakan ini tidak dapat dibatalkan.
+               </p>
+               <div className="flex gap-3">
+                 <button
+                   onClick={() => setShowDeleteConfirm(false)}
+                   className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+                 >
+                   <IconX className="w-4 h-4" />
+                   Batal
+                 </button>
+                 <button
+                   onClick={handleDeleteAccount}
+                   className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                 >
+                   <IconTrash className="w-4 h-4" />
+                   Hapus
+                 </button>
+               </div>
             </div>
           </div>
         )}

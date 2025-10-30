@@ -285,7 +285,7 @@ export default function DashboardPage() {
             </div>
             <div className="min-w-0 flex-1">
               <h1 className="text-xl lg:text-2xl font-semibold text-[#0F4D39] truncate">{`Welcome back${me?.user?.fullName ? ", " + me.user.fullName : "!"}`}</h1>
-              <p className="text-sm text-gray-600 dark:text-gray-300 truncate">{me?.member?.fullName ?? me?.user?.fullName ?? ''}</p>
+              <p className="text-sm text-gray-600 truncate">{me?.member?.fullName ?? me?.user?.fullName ?? ''}</p>
             </div>
           </div>
 
@@ -325,7 +325,7 @@ export default function DashboardPage() {
               onClick?: () => void;
             }) => (
               <div 
-                className={`rounded-2xl border border-gray-200 dark:border-gray-800 bg-gradient-to-br ${gradient} shadow-lg p-4 transform transition-all duration-300 hover:scale-105 hover:shadow-xl ${onClick ? 'cursor-pointer' : ''}`}
+                className={`rounded-2xl border border-gray-200 bg-gradient-to-br ${gradient} shadow-lg p-4 transform transition-all duration-300 hover:scale-105 hover:shadow-xl ${onClick ? 'cursor-pointer' : ''}`}
                 onClick={onClick}
               >
                 <div className="flex items-center justify-between mb-2">
@@ -401,18 +401,18 @@ export default function DashboardPage() {
 
         {/* WhatsApp Verification Notification */}
         {me?.member && !me.member.isPhoneVerified && (
-          <div data-verification-notification className="rounded-2xl border border-orange-200 dark:border-orange-800 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 shadow-sm p-6 mb-6">
+          <div data-verification-notification className="rounded-2xl border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 shadow-sm p-6 mb-6">
             <div className="flex items-start gap-4">
               <div className="flex-shrink-0">
-                <div className="w-12 h-12 bg-orange-100 dark:bg-orange-800 rounded-full flex items-center justify-center">
+                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
                   <span className="text-2xl">📱</span>
                 </div>
               </div>
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-orange-800 dark:text-orange-200 mb-2">
+                <h3 className="text-lg font-semibold text-orange-800 mb-2">
                   Verifikasi Nomor WhatsApp Anda
                 </h3>
-                <p className="text-sm text-orange-700 dark:text-orange-300 mb-4">
+                <p className="text-sm text-orange-700 mb-4">
                   Untuk keamanan akun dan mendapatkan notifikasi penting, silakan verifikasi nomor WhatsApp Anda.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3">
@@ -444,7 +444,7 @@ export default function DashboardPage() {
                     (notification as HTMLElement).style.display = 'none';
                   }
                 }}
-                className="flex-shrink-0 p-1 text-orange-400 hover:text-orange-600 dark:text-orange-500 dark:hover:text-orange-300"
+                className="flex-shrink-0 p-1 text-orange-400 hover:text-orange-600"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -475,7 +475,7 @@ export default function DashboardPage() {
                 </div>
                 
                 <div className="relative">
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 mb-2">
+                  <div className="w-full bg-gray-200 rounded-full h-4 mb-2">
                     <div 
                       className="bg-gradient-to-r from-[#0F4D39] to-emerald-500 h-4 rounded-full transition-all duration-1000 ease-out relative overflow-hidden"
                       style={{ width: `${Math.min(levelInfo.progress, 100)}%` }}
@@ -484,17 +484,17 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   
-                  <div className="flex justify-between text-sm text-gray-600 dark:text-gray-300">
+                  <div className="flex justify-between text-sm text-gray-600">
                     <span>{levelInfo.currentPoints.toLocaleString('id-ID')} poin</span>
                     <span>{levelInfo.pointsNeeded.toLocaleString('id-ID')} poin lagi</span>
                   </div>
                 </div>
                 
-                <div className="mt-3 p-3 bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-gray-800 dark:to-gray-700 rounded-lg">
-                  <div className="text-sm font-medium text-[#0F4D39] dark:text-emerald-400">
+                <div className="mt-3 p-3 bg-gradient-to-r from-emerald-50 to-blue-50 rounded-lg">
+                  <div className="text-sm font-medium text-[#0F4D39]">
                     🏆 Benefit Level {levelInfo.nextLevel}:
                   </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                  <div className="text-xs text-gray-600 mt-1">
                     {levelInfo.nextLevel === 'Silver' && "Diskon 5% + Priority support"}
                     {levelInfo.nextLevel === 'Gold' && "Diskon 10% + Early access events"}
                     {levelInfo.nextLevel === 'Platinum' && "Diskon 15% + VIP treatment + Exclusive events"}
@@ -508,12 +508,12 @@ export default function DashboardPage() {
 
         {/* Slider Section */}
         {sliderImages.length > 0 && (
-          <div className="rounded-lg border border-slate-200 dark:border-gray-800 p-4 mb-4">
+          <div className="rounded-lg border border-slate-200 p-4 mb-4">
             <div className="flex items-center justify-between mb-2">
               <div className="text-lg font-semibold text-[#0F4D39]">Highlights</div>
               <div className="flex gap-2">
-                <button onClick={() => setSliderIndex((prev) => (prev - 1 + sliderImages.length) % sliderImages.length)} className="px-3 py-1 rounded bg-slate-200 dark:bg-gray-700">Prev</button>
-                <button onClick={() => setSliderIndex((prev) => (prev + 1) % sliderImages.length)} className="px-3 py-1 rounded bg-slate-200 dark:bg-gray-700">Next</button>
+                <button onClick={() => setSliderIndex((prev) => (prev - 1 + sliderImages.length) % sliderImages.length)} className="px-3 py-1 rounded bg-slate-200">Prev</button>
+                <button onClick={() => setSliderIndex((prev) => (prev + 1) % sliderImages.length)} className="px-3 py-1 rounded bg-slate-200">Next</button>
               </div>
             </div>
             <div className="relative">
@@ -531,11 +531,11 @@ export default function DashboardPage() {
                 />
               </div>
               {sliderImages[sliderIndex].title && (
-                <div className="mt-2 text-sm text-slate-700 dark:text-gray-300">{sliderImages[sliderIndex].title}</div>
+                <div className="mt-2 text-sm text-slate-700">{sliderImages[sliderIndex].title}</div>
               )}
               <div className="mt-2 flex items-center gap-1">
                 {sliderImages.map((_, i) => (
-                  <button key={i} onClick={() => setSliderIndex(i)} className={`w-2 h-2 rounded-full ${i === sliderIndex ? 'bg-[#0F4D39]' : 'bg-slate-300 dark:bg-gray-700'}`}></button>
+                  <button key={i} onClick={() => setSliderIndex(i)} className={`w-2 h-2 rounded-full ${i === sliderIndex ? 'bg-[#0F4D39]' : 'bg-slate-300'}`}></button>
                 ))}
               </div>
             </div>
@@ -545,16 +545,16 @@ export default function DashboardPage() {
         {sliderPreviewOpen && sliderPreviewItem && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSliderPreviewOpen(false)}>
             <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full border border-slate-200" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between p-3 border-b border-slate-200 dark:border-gray-800">
+              <div className="flex items-center justify-between p-3 border-b border-slate-200">
                 <div className="text-sm font-semibold text-[#0F4D39]">Preview Foto</div>
                 <button onClick={() => setSliderPreviewOpen(false)} className="px-2 py-1 rounded bg-slate-200">Tutup</button>
               </div>
               <div className="p-3">
-                <div className="aspect-[16/9] bg-slate-100 dark:bg-gray-800 rounded-lg overflow-hidden">
+                <div className="aspect-[16/9] bg-slate-100 rounded-lg overflow-hidden">
                   <img src={sliderPreviewItem.imageUrl || '/file.svg'} alt={sliderPreviewItem.title || 'Slider'} className="w-full h-full object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).onerror = null; (e.currentTarget as HTMLImageElement).src = '/file.svg'; }} />
                 </div>
                 {sliderPreviewItem.title && (
-                  <div className="mt-2 text-sm text-slate-700 dark:text-gray-300">{sliderPreviewItem.title}</div>
+                  <div className="mt-2 text-sm text-slate-700">{sliderPreviewItem.title}</div>
                 )}
               </div>
             </div>
@@ -564,18 +564,18 @@ export default function DashboardPage() {
         {/* Ringkasan Membership dipindahkan ke panel konsisten */}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="md:col-span-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow p-4">
+          <div className="md:col-span-2 rounded-xl bg-white border border-gray-200 shadow p-4">
             <h2 className="text-lg font-semibold text-[#0F4D39] mb-3">Information & Updates</h2>
-            <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            <div className="divide-y divide-gray-200">
               {announcements.map((a) => (
-                <div key={a.id} className="py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                <div key={a.id} className="py-3 hover:bg-gray-50 transition-colors">
                   <div className="font-medium text-[#0F4D39]">{a.title}</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-300">{a.shortDescription}</div>
+                  <div className="text-sm text-gray-600">{a.shortDescription}</div>
                   <div className="text-xs text-gray-500">{a.postedAt ? new Date(a.postedAt).toLocaleString() : '-'}</div>
                 </div>
               ))}
               {announcements.length === 0 && (
-                <div className="py-6 text-sm text-gray-600 dark:text-gray-300">No announcements yet.</div>
+                <div className="py-6 text-sm text-gray-600">No announcements yet.</div>
               )}
             </div>
           </div>
@@ -602,15 +602,15 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow p-4">
+        <div className="rounded-xl bg-white border border-gray-200 shadow p-4">
           <h2 className="text-lg font-semibold text-[#0F4D39] mb-3">Promo & Penawaran Spesial</h2>
           {promoError && (
             <div className="py-4 text-sm text-red-600">{promoError}</div>
           )}
           {loadingPromos ? (
-            <div className="py-6 text-sm text-gray-600 dark:text-gray-300">Memuat promo...</div>
+            <div className="py-6 text-sm text-gray-600">Memuat promo...</div>
           ) : promos.length === 0 ? (
-            <div className="py-6 text-sm text-gray-600 dark:text-gray-300">Belum ada promo aktif saat ini.</div>
+            <div className="py-6 text-sm text-gray-600">Belum ada promo aktif saat ini.</div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {promos.map((p) => {
@@ -620,13 +620,13 @@ export default function DashboardPage() {
                 const soon = dl !== null && dl <= 3 && dl >= 0;
                 const descShort = String(p.description || '').slice(0, 150);
                 return (
-                  <button key={p.id} onClick={() => setSelectedPromo(p)} className="text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow p-3 transform transition-transform hover:scale-[1.01]">
+                  <button key={p.id} onClick={() => setSelectedPromo(p)} className="text-left rounded-xl border border-gray-200 bg-white shadow p-3 transform transition-transform hover:scale-[1.01]">
                     <img src={p.imageUrl || '/file.svg'} alt={p.title} loading="lazy" onError={(e) => { (e.currentTarget as HTMLImageElement).onerror = null; (e.currentTarget as HTMLImageElement).src = '/file.svg'; }} className="w-full h-40 object-cover rounded-lg mb-2 bg-gray-100" />
                     <div className="flex items-center justify-between">
                       <div className="font-semibold text-[#0F4D39]">{p.title}</div>
                       {typeBadge(p.type)}
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-300">{descShort}{String(p.description || '').length > 150 ? '...' : ''}</div>
+                    <div className="text-sm text-gray-600">{descShort}{String(p.description || '').length > 150 ? '...' : ''}</div>
                     <div className="mt-2 text-xs text-gray-500">Berlaku sampai {end ? end.toLocaleDateString('id-ID') : ''}</div>
                     {soon && <div className="mt-1 inline-block px-2 py-1 rounded bg-orange-500 text-white text-xs">Segera Berakhir</div>}
                   </button>
@@ -638,14 +638,14 @@ export default function DashboardPage() {
 
         {selectedPromo && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="promo-title">
-            <div className="w-full max-w-2xl rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-lg p-4">
+            <div className="w-full max-w-2xl rounded-xl bg-white border border-gray-200 shadow-lg p-4">
               <div className="flex items-center justify-between mb-2">
                 <div id="promo-title" className="text-lg font-semibold text-[#0F4D39]">{selectedPromo.title}</div>
                 <button onClick={() => setSelectedPromo(null)} className="text-gray-600 hover:text-gray-900" aria-label="Tutup dialog promo">✖</button>
               </div>
               <img src={selectedPromo.imageUrl || '/file.svg'} alt={selectedPromo.title} onError={(e) => { (e.currentTarget as HTMLImageElement).onerror = null; (e.currentTarget as HTMLImageElement).src = '/file.svg'; }} className="w-full h-60 object-cover rounded-lg mb-3 bg-gray-100" />
               <div className="mb-2">{typeBadge(selectedPromo.type)}</div>
-              <div className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-line">{selectedPromo.description}</div>
+              <div className="text-sm text-gray-700 whitespace-pre-line">{selectedPromo.description}</div>
               <div className="mt-2 text-xs text-gray-500">Periode: {selectedPromo.startDate ? new Date(selectedPromo.startDate).toLocaleDateString('id-ID') : ''}{selectedPromo.endDate ? ` s.d. ${new Date(selectedPromo.endDate).toLocaleDateString('id-ID')}` : ''}</div>
             </div>
           </div>
@@ -656,11 +656,11 @@ export default function DashboardPage() {
           const MiniTrendChart = ({ title, data }: { title: string; data: number[] }) => {
             const max = Math.max(1, ...data);
             return (
-              <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm p-4">
-                <div className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-200">{title}</div>
+              <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
+                <div className="text-sm font-medium mb-2 text-gray-700">{title}</div>
                 <div className="flex items-end gap-1 h-16">
                   {data.map((v, i) => (
-                    <div key={i} className="w-3 bg-[#0F4D39]/70 dark:bg-emerald-400" style={{ height: `${Math.max(4, ((v || 0) / max) * 64)}px` }} />
+                    <div key={i} className="w-3 bg-[#0F4D39]/70" style={{ height: `${Math.max(4, ((v || 0) / max) * 64)}px` }} />
                   ))}
                 </div>
                 <div className="mt-2 text-xs text-gray-500">Terbaru di kanan</div>
@@ -676,9 +676,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Enhanced Activity Feed */}
-      <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow p-4">
+      <div className="rounded-xl bg-white border border-gray-200 shadow p-4">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-[#0F4D39] dark:text-emerald-400">📈 Aktivitas Terbaru</h3>
+          <h3 className="text-lg font-semibold text-[#0F4D39]">📈 Aktivitas Terbaru</h3>
           <button className="text-sm text-gray-500 hover:text-[#0F4D39] transition-colors">
             Lihat Semua
           </button>
@@ -688,21 +688,21 @@ export default function DashboardPage() {
            {activities.length > 0 ? (
              activities.slice(0, 5).map((activity, index) => {
               const getActivityStyle = (type: string) => {
-                 switch (type.toUpperCase()) {
-                   case 'LOGIN':
-                     return { icon: '🔐', color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200' };
-                   case 'REDEEM':
-                     return { icon: '🎯', color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-emerald-200' };
-                   case 'BOOK':
-                     return { icon: '📅', color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20', border: 'border-purple-200' };
-                   case 'CANCEL':
-                     return { icon: '❌', color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200' };
-                   case 'PAYMENT':
-                     return { icon: '💳', color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200' };
-                   default:
-                     return { icon: '📝', color: 'text-gray-600', bg: 'bg-gray-50 dark:bg-gray-900/20', border: 'border-gray-200' };
-                 }
-               };
+                switch (type.toUpperCase()) {
+                  case 'LOGIN':
+                    return { icon: '🔐', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' };
+                  case 'REDEEM':
+                    return { icon: '🎯', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' };
+                  case 'BOOK':
+                    return { icon: '📅', color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200' };
+                  case 'CANCEL':
+                    return { icon: '❌', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' };
+                  case 'PAYMENT':
+                    return { icon: '💳', color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' };
+                  default:
+                    return { icon: '📝', color: 'text-gray-600', bg: 'bg-gray-50', border: 'border-gray-200' };
+                }
+              };
     
               const style = getActivityStyle(activity.type);
               const timeAgo = new Date(activity.createdAt).toLocaleString('id-ID', {
@@ -713,7 +713,7 @@ export default function DashboardPage() {
               });
     
               return (
-                <div key={index} className="flex items-start space-x-3 group hover:bg-gray-50 dark:hover:bg-gray-800/50 p-3 rounded-xl transition-all duration-200">
+                <div key={index} className="flex items-start space-x-3 group hover:bg-gray-50 p-3 rounded-xl transition-all duration-200">
                   {/* Activity Icon */}
                   <div className={`flex-shrink-0 w-10 h-10 rounded-full ${style.bg} ${style.border} border flex items-center justify-center`}>
                     <span className="text-lg">{style.icon}</span>
@@ -722,17 +722,17 @@ export default function DashboardPage() {
                   {/* Activity Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <p className={`text-sm font-medium ${style.color} dark:text-gray-200`}>
+                      <p className={`text-sm font-medium ${style.color}`}>
                         {activity.title}
                       </p>
-                      <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0 ml-2">
+                      <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
                         {timeAgo}
                       </span>
                     </div>
                     
                     {/* Additional details */}
                     {activity.detail && (
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                      <p className="text-xs text-gray-600 mt-1">
                         {activity.detail}
                       </p>
                     )}
@@ -740,7 +740,7 @@ export default function DashboardPage() {
                     {/* Points or value indicator - for now we'll skip this since it's not in the data structure */}
                     {activity.type === 'REDEEM' && (
                       <div className="flex items-center mt-2">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
                           Redeem
                         </span>
                       </div>
@@ -759,10 +759,10 @@ export default function DashboardPage() {
           ) : (
             <div className="text-center py-8">
               <div className="text-4xl mb-2">📱</div>
-              <p className="text-gray-500 dark:text-gray-400 text-sm">
+              <p className="text-gray-500 text-sm">
                 Belum ada aktivitas terbaru
               </p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+              <p className="text-xs text-gray-400 mt-1">
                 Mulai gunakan aplikasi untuk melihat aktivitas Anda
               </p>
             </div>
@@ -771,12 +771,12 @@ export default function DashboardPage() {
         
         {/* Quick action buttons */}
          {activities.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="mt-4 pt-4 border-t border-gray-200">
             <div className="flex space-x-2">
-              <button className="flex-1 px-3 py-2 text-xs font-medium text-[#0F4D39] bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 rounded-lg transition-colors">
+              <button className="flex-1 px-3 py-2 text-xs font-medium text-[#0F4D39] bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">
                 📊 Lihat Statistik
               </button>
-              <button className="flex-1 px-3 py-2 text-xs font-medium text-[#0F4D39] bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 rounded-lg transition-colors">
+              <button className="flex-1 px-3 py-2 text-xs font-medium text-[#0F4D39] bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">
                 📈 Trend Aktivitas
               </button>
             </div>
@@ -785,20 +785,20 @@ export default function DashboardPage() {
       </div>
 
       {/* Notifikasi Penting */}
-      <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow p-4">
+      <div className="rounded-xl bg-white border border-gray-200 shadow p-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-[#0F4D39]">Notifikasi Penting</h2>
         </div>
-        <div className="divide-y divide-gray-200 dark:divide-gray-700">
+        <div className="divide-y divide-gray-200">
           {notifications.map((n, idx) => (
             <div key={idx} className="py-3">
-              <div className="text-sm text-gray-800 dark:text-gray-100 font-medium">{n.title}</div>
-              {n.description && <div className="text-xs text-gray-600 dark:text-gray-300">{n.description}</div>}
+              <div className="text-sm text-gray-800 font-medium">{n.title}</div>
+              {n.description && <div className="text-xs text-gray-600">{n.description}</div>}
               {n.createdAt && <div className="text-xs text-gray-500">{new Date(n.createdAt).toLocaleString('id-ID')}</div>}
             </div>
           ))}
           {notifications.length === 0 && (
-            <div className="py-6 text-sm text-gray-600 dark:text-gray-300">Tidak ada notifikasi saat ini.</div>
+            <div className="py-6 text-sm text-gray-600">Tidak ada notifikasi saat ini.</div>
           )}
         </div>
       </div>
