@@ -22,7 +22,7 @@ const nextConfig: NextConfig = {
     return config;
   },
   async rewrites() {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://family.thelodgegroup.id/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://family.thelodgegroup.id';
     return [
       { source: '/api/:path*', destination: `${apiUrl}/api/:path*` },
       { source: '/files/:path*', destination: `${apiUrl}/files/:path*` },

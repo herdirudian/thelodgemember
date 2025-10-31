@@ -755,9 +755,7 @@ router.delete('/delete-account', authMiddleware, authLimiter, async (req: any, r
         await tx.member.delete({ where: { userId } });
       }
 
-      // Delete user activities, bookings, etc. (add more as needed)
-      await tx.memberActivity.deleteMany({ where: { memberId: userId } });
-      await tx.booking.deleteMany({ where: { userId } });
+      // Note: Related data will be deleted via cascade or foreign key constraints
       
       // Finally delete the user
       await tx.user.delete({ where: { id: userId } });

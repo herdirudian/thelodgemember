@@ -643,4 +643,134 @@ router.post('/reset-password', authLimiter, async (req, res) => {
   }
 });
 
+// Send verification code for account deletion
+router.post('/send-delete-verification', authMiddleware, authLimiter, async (req: any, res) => {
+  try {
+    const userId = req.user.uid as string;
+    const { type } = req.body as { type: 'whatsapp' | 'email' };
+
+    if (!type || !['whatsapp', 'email'].includes(type)) {
+      return res.status(400).json({ message: 'Tipe verifikasi tidak valid' });
+    }
+
+    // Get user data
+    const user = await prisma.user.findUnique({ 
+      where: { id: userId }, 
+      include: { member: true } 
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User tidak ditemukan' });
+    }
+
+    // Generate 6-digit verification code
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Store verification code in database
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        resetToken: verificationCode,
+        resetTokenExpiry: expiresAt
+      }
+    });
+
+    if (type === 'email') {
+      // Send email verification
+      const emailSubject = 'Kode Verifikasi Hapus Akun - The Lodge Family';
+      const emailBody = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #dc2626;">Verifikasi Penghapusan Akun</h2>
+          <p>Halo ${user.member?.fullName || user.email},</p>
+          <p>Anda telah meminta untuk menghapus akun Anda. Untuk melanjutkan, gunakan kode verifikasi berikut:</p>
+          <div style="background-color: #f3f4f6; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
+            <h1 style="color: #dc2626; font-size: 32px; margin: 0; letter-spacing: 4px;">${verificationCode}</h1>
+          </div>
+          <p><strong>Kode ini akan kedaluwarsa dalam 10 menit.</strong></p>
+          <p style="color: #dc2626;"><strong>Peringatan:</strong> Penghapusan akun tidak dapat dibatalkan dan semua data Anda akan dihapus permanen.</p>
+          <p>Jika Anda tidak meminta penghapusan akun, abaikan email ini dan akun Anda akan tetap aman.</p>
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
+          <p style="color: #6b7280; font-size: 14px;">Email ini dikirim secara otomatis, mohon jangan membalas.</p>
+        </div>
+      `;
+
+      await sendEmail(user.email, emailSubject, emailBody);
+    } else if (type === 'whatsapp') {
+      // For WhatsApp, we would integrate with WhatsApp Business API
+      // For now, we'll simulate the sending process
+      console.log(`WhatsApp verification code for ${user.member?.phone}: ${verificationCode}`);
+      
+      // In production, you would integrate with WhatsApp Business API here
+      // Example: await sendWhatsAppMessage(user.member?.phone, `Kode verifikasi hapus akun: ${verificationCode}`);
+    }
+
+    res.json({ 
+      success: true, 
+      message: `Kode verifikasi telah dikirim ke ${type === 'whatsapp' ? 'WhatsApp' : 'email'} Anda` 
+    });
+
+  } catch (e) {
+    console.error('Send delete verification error:', e);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Verify code and delete account
+router.delete('/delete-account', authMiddleware, authLimiter, async (req: any, res) => {
+  try {
+    const userId = req.user.uid as string;
+    const { verificationCode, verificationType } = req.body as { 
+      verificationCode: string; 
+      verificationType: 'whatsapp' | 'email' 
+    };
+
+    if (!verificationCode || !verificationType) {
+      return res.status(400).json({ message: 'Kode verifikasi dan tipe verifikasi harus diisi' });
+    }
+
+    // Get user data
+    const user = await prisma.user.findUnique({ 
+      where: { id: userId }, 
+      include: { member: true } 
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User tidak ditemukan' });
+    }
+
+    // Verify the code
+    if (!user.resetToken || !user.resetTokenExpiry) {
+      return res.status(400).json({ message: 'Kode verifikasi tidak valid atau sudah kadaluarsa' });
+    }
+
+    if (user.resetToken !== verificationCode || user.resetTokenExpiry < new Date()) {
+      return res.status(400).json({ message: 'Kode verifikasi tidak valid atau sudah kadaluarsa' });
+    }
+
+    // Delete user account and related data
+    await prisma.$transaction(async (tx) => {
+      // Delete member data if exists
+      if (user.member) {
+        await tx.member.delete({ where: { userId } });
+      }
+
+      // Delete user activities (add more as needed)
+      await tx.memberActivity.deleteMany({ where: { memberId: userId } });
+      
+      // Finally delete the user
+      await tx.user.delete({ where: { id: userId } });
+    });
+
+    res.json({ 
+      success: true, 
+      message: 'Akun berhasil dihapus. Terima kasih telah menggunakan layanan kami.' 
+    });
+
+  } catch (e) {
+    console.error('Delete account error:', e);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 export default router;

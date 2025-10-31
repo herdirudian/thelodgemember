@@ -15,6 +15,7 @@ import { generateQRDataURL } from '../utils/qr'
 import { createRedeemProofPDF } from '../utils/pdf'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
+import { NotificationService } from '../utils/notificationService';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -678,7 +679,8 @@ router.get('/search-member', adminAuth, async (req, res) => {
         user: {
           select: {
             email: true,
-            fullName: true
+            fullName: true,
+            isActive: true
           }
         }
       }
@@ -701,8 +703,7 @@ router.get('/search-member', adminAuth, async (req, res) => {
         ip: req.ip,
         ua: req.headers['user-agent'],
         body: {},
-        query: req.query,
-        description: `Searched for member: ${searchQuery}`
+        query: req.query
       });
     } catch (activityError) {
       console.error('Failed to record admin activity:', activityError);
@@ -737,8 +738,7 @@ router.get('/search-member', adminAuth, async (req, res) => {
         ip: req.ip,
         ua: req.headers['user-agent'],
         body: {},
-        query: req.query,
-        description: `Failed to search member: ${req.query.query}`
+        query: req.query
       });
     } catch (activityError) {
       console.error('Failed to record admin activity:', activityError);
@@ -4152,10 +4152,7 @@ router.put('/members/:id', adminAuth, async (req, res) => {
     
     const member = await prisma.user.update({
       where: { id },
-      data: updateData,
-      include: {
-        memberProfile: true
-      }
+      data: updateData
     });
 
     await recordAdminActivity({
@@ -4215,29 +4212,30 @@ router.post('/members/:id/adjust-points', adminAuth, async (req, res) => {
     
     const member = await prisma.user.findUnique({
       where: { id },
-      include: { memberProfile: true }
+      include: { member: true }
     });
 
-    if (!member) {
+    if (!member || !member.member) {
       return res.status(404).json({ message: 'Member not found' });
     }
 
-    const currentPoints = member.memberProfile?.points || 0;
+    const currentPoints = member.member.pointsBalance || 0;
     const newPoints = currentPoints + points;
 
-    await prisma.memberProfile.update({
+    await prisma.member.update({
       where: { userId: id },
-      data: { points: newPoints }
+      data: { pointsBalance: newPoints }
     });
 
     // Record the transaction
-    await prisma.pointTransaction.create({
+    await prisma.pointAdjustment.create({
       data: {
-        userId: id,
+        memberId: member.id,
         points: points,
-        type: points > 0 ? 'EARNED' : 'SPENT',
-        description: reason || 'Admin adjustment',
-        adminId: (req as any).user!.id
+        type: points > 0 ? 'ADD' : 'SUBTRACT',
+        reason: reason || 'Admin adjustment',
+        adminId: (req as any).user!.id,
+        adminName: (req as any).user!.name || 'Unknown Admin'
       }
     });
 
@@ -4261,88 +4259,6 @@ router.post('/members/:id/adjust-points', adminAuth, async (req, res) => {
   }
 });
 
-// POST /api/admin/events/:id/toggle-status - Toggle event status
-router.post('/events/:id/toggle-status', adminAuth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    const event = await prisma.event.findUnique({
-      where: { id }
-    });
-
-    if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
-    }
-
-    const updatedEvent = await prisma.event.update({
-      where: { id },
-      data: { isActive: !event.isActive }
-    });
-
-    await recordAdminActivity({
-      adminId: (req as any).user!.id,
-      adminName: (req as any).user!.name,
-      adminRole: (req as any).user!.role,
-      method: req.method,
-      path: req.path,
-      status: 200,
-      ip: req.ip,
-      ua: req.get('User-Agent'),
-      body: req.body,
-      query: req.query
-    });
-
-    res.json({ 
-      message: `Event ${updatedEvent.isActive ? 'activated' : 'deactivated'} successfully`, 
-      event: updatedEvent 
-    });
-  } catch (error: any) {
-    console.error('Toggle event status error:', error);
-    res.status(500).json({ message: error?.message || 'Failed to toggle event status' });
-  }
-});
-
-// POST /api/admin/promos/:id/toggle-status - Toggle promo status  
-router.post('/promos/:id/toggle-status', adminAuth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    const promo = await prisma.promo.findUnique({
-      where: { id }
-    });
-
-    if (!promo) {
-      return res.status(404).json({ message: 'Promo not found' });
-    }
-
-    const updatedPromo = await prisma.promo.update({
-      where: { id },
-      data: { isActive: !promo.isActive }
-    });
-
-    await recordAdminActivity({
-      adminId: (req as any).user!.id,
-      adminName: (req as any).user!.name,
-      adminRole: (req as any).user!.role,
-      method: req.method,
-      path: req.path,
-      status: 200,
-      ip: req.ip,
-      ua: req.get('User-Agent'),
-      body: req.body,
-      query: req.query
-    });
-
-    res.json({ 
-      message: `Promo ${updatedPromo.isActive ? 'activated' : 'deactivated'} successfully`, 
-      promo: updatedPromo 
-    });
-  } catch (error: any) {
-    console.error('Toggle promo status error:', error);
-    res.status(500).json({ message: error?.message || 'Failed to toggle promo status' });
-  }
-});
-
 // GET /api/admin/tickets - Get tickets for redeem voucher
 router.get('/tickets', adminAuth, async (req, res) => {
   try {
@@ -4361,15 +4277,14 @@ router.get('/tickets', adminAuth, async (req, res) => {
 // GET /api/admin/point-redemptions - Get point redemptions for redeem voucher
 router.get('/point-redemptions', adminAuth, async (req, res) => {
   try {
-    const redemptions = await prisma.pointTransaction.findMany({
-      where: { type: 'SPENT' },
+    const redemptions = await prisma.pointRedemption.findMany({
       include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            memberProfile: {
+        member: {
+          include: {
+            user: {
               select: {
+                id: true,
+                email: true,
                 fullName: true
               }
             }
@@ -4391,13 +4306,14 @@ router.get('/event-registrations', adminAuth, async (req, res) => {
   try {
     const registrations = await prisma.eventRegistration.findMany({
       include: {
-        user: {
+        member: {
           select: {
             id: true,
-            email: true,
-            memberProfile: {
+            fullName: true,
+            user: {
               select: {
-                fullName: true
+                id: true,
+                email: true
               }
             }
           }
@@ -4432,6 +4348,7 @@ router.post('/create-ticket-for-member', adminAuth, async (req, res) => {
     }
 
     let member;
+    let memberUser;
     
     // Find member by ID or email
     if (memberId) {
@@ -4439,12 +4356,14 @@ router.post('/create-ticket-for-member', adminAuth, async (req, res) => {
         where: { id: memberId },
         include: { user: true }
       });
+      memberUser = member?.user;
     } else if (memberEmail) {
       const user = await prisma.user.findUnique({
         where: { email: memberEmail },
-        include: { memberProfile: true }
+        include: { member: true }
       });
-      member = user?.memberProfile;
+      member = user?.member;
+      memberUser = user;
     }
 
     if (!member) {
@@ -4489,7 +4408,7 @@ router.post('/create-ticket-for-member', adminAuth, async (req, res) => {
 
     // Send notification to member
     try {
-      await NotificationService.createTicketClaimNotification(member.id, ticket.name);
+      await NotificationService.createTicketClaimNotification(member.id, ticket.name, ticket.id);
     } catch (notifError) {
       console.error('Failed to send notification:', notifError);
     }
@@ -4517,7 +4436,7 @@ router.post('/create-ticket-for-member', adminAuth, async (req, res) => {
       data: {
         ticket,
         memberName: member.fullName,
-        memberEmail: member.user?.email
+        memberEmail: memberUser?.email
       }
     });
   } catch (error: any) {
@@ -4552,12 +4471,11 @@ router.get('/member-tickets', adminAuth, async (req, res) => {
     const formattedTickets = tickets.map(ticket => ({
       id: ticket.id,
       name: ticket.name,
-      description: ticket.description,
       validDate: ticket.validDate,
       status: ticket.status,
       friendlyCode: ticket.friendlyCode,
       member: {
-        name: ticket.member.name,
+        name: ticket.member.fullName,
         email: ticket.member.user?.email || 'No email'
       },
       createdAt: ticket.createdAt

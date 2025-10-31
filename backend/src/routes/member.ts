@@ -165,14 +165,7 @@ router.post('/tickets/redeem-free', authMiddleware, async (req: any, res) => {
       
       await sendEmail(member.user.email, emailSubject, emailHtml, undefined, attachments);
       
-      // Update email sent status for event registration
-      await prisma.eventRegistration.update({
-        where: { id: registrationId },
-        data: {
-          emailSent: true,
-          emailSentAt: new Date()
-        }
-      });
+      // Note: No event registration to update for free ticket redemption
     } catch (emailError) {
       console.error('Failed to send ticket email:', emailError);
       // Don't fail the request if email fails
@@ -570,14 +563,7 @@ router.post('/points/redeem', authMiddleware, async (req: any, res) => {
       
       await sendEmail(member.user.email, emailSubject, emailHtml, undefined, attachments);
       
-      // Update email sent status
-      await prisma.promoRegistration.update({
-        where: { id: promoRegistration.id },
-        data: {
-          emailSent: true,
-          emailSentAt: new Date()
-        }
-      });
+      // Note: No promoRegistration to update for point redemption
     } catch (emailError) {
       console.error('Failed to send point redemption email:', emailError);
       // Don't fail the request if email fails
@@ -658,14 +644,14 @@ router.post('/promos/:id/register', authMiddleware, async (req: any, res) => {
 
     // Generate registration data
     const registrationId = uuidv4();
-    const memberName = member.fullName || member.user.name || 'Member';
+    const memberName = member.fullName || member.user.email || 'Member';
     
     // Generate QR code
     const qrData = `PROMO:${promoId}:${memberName}:${registrationId}`;
     const qr = await generateQRDataURL(qrData);
     
     // Generate friendly code
-    const friendlyCode = signPayloadWithFriendlyCode({
+    const { friendlyCode } = signPayloadWithFriendlyCode({
       type: 'promo_registration',
       promoId,
       memberId: member.id,
@@ -1530,16 +1516,7 @@ router.get('/promos/my-vouchers', authMiddleware, async (req: any, res) => {
     const promoRegistrations = await prisma.promoRegistration.findMany({
       where: { memberId: member.id },
       include: {
-        promo: {
-          select: {
-            id: true,
-            title: true,
-            description: true,
-            imageUrl: true,
-            startDate: true,
-            endDate: true
-          }
-        }
+        promo: true
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -1601,13 +1578,12 @@ router.get('/bookings/tourism-tickets', authMiddleware, async (req: any, res) =>
       location: booking.ticket.location,
       quantity: booking.quantity,
       totalPrice: booking.totalAmount,
-      status: booking.validUntil && new Date(booking.validUntil) < new Date() ? 'EXPIRED' : 
-              booking.usedAt ? 'USED' : 'ACTIVE',
-      voucherCode: booking.voucherCode,
-      validDate: booking.validUntil,
+      status: booking.redeemedAt ? 'USED' : 'ACTIVE',
+      voucherCode: booking.friendlyCode || booking.id,
+      validDate: booking.visitDate,
       bookingDate: booking.createdAt,
-      usedAt: booking.usedAt,
-      qrCode: booking.qrCode,
+      usedAt: booking.redeemedAt,
+      qrCode: booking.qrPayloadHash || '',
       imageUrl: booking.ticket.imageUrl,
       includes: [], // Can be populated from ticket details if needed
       terms: [] // Can be populated from ticket details if needed
@@ -1694,42 +1670,40 @@ router.get('/user-tickets', authMiddleware, async (req: any, res) => {
     const userTickets = [];
 
     // Get point redemptions (vouchers)
-    const pointRedemptions = await prisma.pointTransaction.findMany({
+    const pointRedemptions = await prisma.pointRedemption.findMany({
       where: { 
-        userId: userId,
-        type: 'SPENT'
+        memberId: member.id,
+        status: 'ACTIVE'
       },
       include: {
-        benefit: true
+        promo: true
       },
       orderBy: { createdAt: 'desc' }
     });
 
     // Transform point redemptions to voucher format
     for (const redemption of pointRedemptions) {
-      if (redemption.benefit) {
-        // Generate QR code for voucher
-        const { data, hash } = signPayloadWithFriendlyCode({
-          type: 'voucher',
-          voucherName: redemption.benefit.title,
-          memberId: member.id,
-          redemptionId: redemption.id,
-        });
-        
-        const qrUrl = `${config.appUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}`;
-        const qrCode = await generateQRDataURL(qrUrl);
+      // Generate QR code for voucher
+      const { data, hash } = signPayloadWithFriendlyCode({
+        type: 'voucher',
+        voucherName: redemption.rewardName,
+        memberId: member.id,
+        redemptionId: redemption.id,
+      });
+      
+      const qrUrl = `${config.appUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}`;
+      const qrCode = await generateQRDataURL(qrUrl);
 
-        userTickets.push({
-          id: redemption.id,
-          type: 'voucher',
-          name: redemption.benefit.title,
-          description: redemption.benefit.description || 'Voucher Promo',
-          status: 'active', // Assume active for now
-          validUntil: redemption.benefit.validUntil,
-          claimedAt: redemption.createdAt,
-          qrCode: qrCode
-        });
-      }
+      userTickets.push({
+        id: redemption.id,
+        type: 'voucher',
+        name: redemption.rewardName,
+        description: redemption.promo?.description || 'Voucher Promo',
+        status: redemption.status.toLowerCase(),
+        validUntil: null, // PointRedemption doesn't have validUntil
+        claimedAt: redemption.createdAt,
+        qrCode: qrCode
+      });
     }
 
     // Get tourism ticket bookings
@@ -1746,16 +1720,18 @@ router.get('/user-tickets', authMiddleware, async (req: any, res) => {
 
     // Transform tourism bookings to ticket format
     for (const booking of tourismBookings) {
+      // Generate QR code for tourism ticket booking
+      const qrData = booking.qrPayloadHash || '';
+      
       userTickets.push({
         id: booking.id,
         type: 'ticket',
         name: booking.ticket.name,
         description: booking.ticket.description,
-        status: booking.validUntil && new Date(booking.validUntil) < new Date() ? 'expired' : 
-                booking.usedAt ? 'used' : 'active',
-        validUntil: booking.validUntil,
+        status: booking.status === 'PAID' ? 'active' : 'pending',
+        validUntil: booking.visitDate, // Use visitDate as validUntil
         claimedAt: booking.createdAt,
-        qrCode: booking.qrCode || ''
+        qrCode: qrData
       });
     }
 

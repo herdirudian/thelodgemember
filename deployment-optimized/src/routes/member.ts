@@ -108,6 +108,15 @@ router.post('/tickets/redeem-free', authMiddleware, async (req: any, res) => {
       friendlyCode,
     }});
 
+    // Create notification for ticket redemption
+    try {
+      const { NotificationService } = await import('../utils/notificationService');
+      await NotificationService.createTicketClaimNotification(member.id, ticketName, ticket.id);
+    } catch (notifError) {
+      console.error('Error creating ticket claim notification:', notifError);
+      // Don't fail the ticket creation if notification fails
+    }
+
     // Send email notification with e-voucher
     try {
       const { sendEmail } = await import('../utils/email');
@@ -155,6 +164,8 @@ router.post('/tickets/redeem-free', authMiddleware, async (req: any, res) => {
       `;
       
       await sendEmail(member.user.email, emailSubject, emailHtml, undefined, attachments);
+      
+      // Note: No event registration to update for free ticket redemption
     } catch (emailError) {
       console.error('Failed to send ticket email:', emailError);
       // Don't fail the request if email fails
@@ -551,6 +562,8 @@ router.post('/points/redeem', authMiddleware, async (req: any, res) => {
       `;
       
       await sendEmail(member.user.email, emailSubject, emailHtml, undefined, attachments);
+      
+      // Note: No promoRegistration to update for point redemption
     } catch (emailError) {
       console.error('Failed to send point redemption email:', emailError);
       // Don't fail the request if email fails
@@ -568,6 +581,9 @@ router.get('/promos', async (req, res) => {
         startDate: { lte: now },
         endDate: { gte: now }
       },
+      include: {
+        event: true // Include linked event data
+      },
       orderBy: { startDate: 'desc' }
     });
 
@@ -584,13 +600,167 @@ router.get('/promos', async (req, res) => {
           }
         }
       } catch {}
-      return { ...p, imageUrl: fixedImageUrl };
+      
+      // Map the event relationship to linkedEvent for frontend compatibility
+      return { 
+        ...p, 
+        imageUrl: fixedImageUrl,
+        linkedEvent: p.event, // Map event to linkedEvent
+        linkedEventId: p.eventId // Ensure linkedEventId is available
+      };
     });
 
     res.json(enriched);
   } catch (e: any) {
     console.error('Member promos error:', e);
     res.status(500).json({ message: e?.message || 'Server error' });
+  }
+});
+
+// Register for promo (for promos without linked events)
+router.post('/promos/:id/register', authMiddleware, async (req: any, res) => {
+  try {
+    const userId = req.user.uid as string;
+    const promoId = req.params.id;
+
+    // Get member info
+    const member = await prisma.member.findUnique({ 
+      where: { userId },
+      include: { user: true }
+    });
+    if (!member) return res.status(404).json({ message: 'Member not found' });
+
+    // Get promo info
+    const promo = await prisma.promo.findUnique({
+      where: { id: promoId }
+    });
+    if (!promo) return res.status(404).json({ message: 'Promo not found' });
+
+    // Check if promo is still active
+    const now = new Date();
+    if (now < promo.startDate || now > promo.endDate) {
+      return res.status(400).json({ message: 'Promo is not active' });
+    }
+
+    // Generate registration data
+    const registrationId = uuidv4();
+    const memberName = member.fullName || member.user.email || 'Member';
+    
+    // Generate QR code
+    const qrData = `PROMO:${promoId}:${memberName}:${registrationId}`;
+    const qr = await generateQRDataURL(qrData);
+    
+    // Generate friendly code
+    const { friendlyCode } = signPayloadWithFriendlyCode({
+      type: 'promo_registration',
+      promoId,
+      memberId: member.id,
+      registrationId,
+      memberName,
+      timestamp: now.toISOString()
+    });
+
+    // Save promo registration to database
+    const promoRegistration = await prisma.promoRegistration.create({
+      data: {
+        memberId: member.id,
+        promoId: promoId,
+        registrationId: registrationId,
+        voucherCode: friendlyCode,
+        qrCode: qr,
+        status: 'ACTIVE',
+        isUsed: false,
+        emailSent: false
+      }
+    });
+
+    // Send email notification with e-voucher for promo registration
+    try {
+      const emailSubject = `E-Voucher Promo: ${promo.title} - The Lodge Family`;
+      
+      // Create QR code attachment
+      const qrBuffer = Buffer.from(qr.split(',')[1], 'base64');
+      const attachments = [{
+        filename: 'qr-code.png',
+        content: qrBuffer,
+        cid: 'qrcode'
+      }];
+      
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+          <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <h2 style="color: #0F4D39; text-align: center; margin-bottom: 30px;">E-Voucher Pendaftaran Promo</h2>
+            
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <h3 style="color: #0F4D39; margin-top: 0;">Detail Promo</h3>
+              <p><strong>Nama Promo:</strong> ${promo.title}</p>
+              <p><strong>Nama Member:</strong> ${memberName}</p>
+              <p><strong>Kode Voucher:</strong> ${friendlyCode}</p>
+              <p><strong>Periode Promo:</strong> ${promo.startDate.toLocaleDateString('id-ID')} - ${promo.endDate.toLocaleDateString('id-ID')}</p>
+              ${promo.description ? `<p><strong>Deskripsi:</strong> ${promo.description}</p>` : ''}
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <h3 style="color: #0F4D39;">QR Code E-Voucher</h3>
+              <img src="cid:qrcode" alt="QR Code" style="max-width: 200px; border: 2px solid #0F4D39; border-radius: 8px;">
+              <p style="margin-top: 15px; color: #666; font-size: 14px;">
+                Tunjukkan QR Code ini saat menggunakan promo
+              </p>
+            </div>
+            
+            <div style="background-color: #e8f5e8; padding: 20px; border-radius: 8px; border-left: 4px solid #0F4D39;">
+              <h4 style="color: #0F4D39; margin-top: 0;">Informasi Penting:</h4>
+              <ul style="margin: 0; padding-left: 20px; color: #333;">
+                <li>E-voucher ini berlaku sebagai bukti pendaftaran promo</li>
+                <li>Harap tunjukkan e-voucher ini (digital atau print) saat menggunakan promo</li>
+                <li>Promo berlaku sesuai syarat dan ketentuan yang berlaku</li>
+                <li>Untuk pertanyaan, hubungi customer service kami</li>
+              </ul>
+            </div>
+            
+            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+              <p style="margin: 0; color: #0F4D39; font-weight: bold;">The Lodge Family</p>
+              <p style="margin: 5px 0; color: #666; font-size: 14px;">
+                Email: ${process.env.FROM_EMAIL} | Website: ${process.env.FRONTEND_URL}
+              </p>
+              <p style="margin: 0; color: #999; font-size: 12px;">
+                Email ini dikirim secara otomatis, mohon tidak membalas email ini.
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      await sendEmail(member.user.email, emailSubject, emailHtml, undefined, attachments);
+      
+      // Update email sent status
+      await prisma.promoRegistration.update({
+        where: { id: promoRegistration.id },
+        data: {
+          emailSent: true,
+          emailSentAt: new Date()
+        }
+      });
+    } catch (emailError) {
+      console.error('Failed to send promo registration email:', emailError);
+      // Don't fail the request if email fails
+    }
+
+    res.json({ 
+      registration: {
+        id: registrationId,
+        promoId,
+        memberId: member.id,
+        memberName,
+        qr,
+        friendlyCode,
+        createdAt: now.toISOString()
+      },
+      message: 'Berhasil mendaftar promo! E-voucher telah dikirim ke email Anda.'
+    });
+  } catch (e) { 
+    console.error(e); 
+    res.status(500).json({ message: 'Server error' }); 
   }
 });
 
@@ -1331,7 +1501,7 @@ router.get('/benefits/my-redemptions', authMiddleware, async (req: any, res) => 
   }
 });
 
-// Get member's promo vouchers
+// Get member's claimed promo vouchers
 router.get('/promos/my-vouchers', authMiddleware, async (req: any, res) => {
   try {
     const userId = req.user.uid as string;
@@ -1346,16 +1516,7 @@ router.get('/promos/my-vouchers', authMiddleware, async (req: any, res) => {
     const promoRegistrations = await prisma.promoRegistration.findMany({
       where: { memberId: member.id },
       include: {
-        promo: {
-          select: {
-            id: true,
-            title: true,
-            description: true,
-            imageUrl: true,
-            startDate: true,
-            endDate: true
-          }
-        }
+        promo: true
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -1417,13 +1578,12 @@ router.get('/bookings/tourism-tickets', authMiddleware, async (req: any, res) =>
       location: booking.ticket.location,
       quantity: booking.quantity,
       totalPrice: booking.totalAmount,
-      status: booking.validUntil && new Date(booking.validUntil) < new Date() ? 'EXPIRED' : 
-              booking.usedAt ? 'USED' : 'ACTIVE',
-      voucherCode: booking.voucherCode,
-      validDate: booking.validUntil,
+      status: booking.redeemedAt ? 'USED' : 'ACTIVE',
+      voucherCode: booking.friendlyCode || booking.id,
+      validDate: booking.visitDate,
       bookingDate: booking.createdAt,
-      usedAt: booking.usedAt,
-      qrCode: booking.qrCode,
+      usedAt: booking.redeemedAt,
+      qrCode: booking.qrPayloadHash || '',
       imageUrl: booking.ticket.imageUrl,
       includes: [], // Can be populated from ticket details if needed
       terms: [] // Can be populated from ticket details if needed
@@ -1439,6 +1599,146 @@ router.get('/bookings/tourism-tickets', authMiddleware, async (req: any, res) =>
       success: false,
       message: error?.message || 'Failed to fetch tourism ticket bookings' 
     });
+  }
+});
+
+// GET /api/tickets - Get member's claimed tickets (for My Ticket page)
+router.get('/tickets', authMiddleware, async (req: any, res) => {
+  try {
+    const userId = req.user.uid as string;
+    const member = await prisma.member.findUnique({ 
+      where: { userId },
+      include: { user: true }
+    });
+    
+    if (!member) {
+      return res.status(404).json({ message: 'Member not found' });
+    }
+
+    // Get all tickets for this member
+    const tickets = await prisma.ticket.findMany({
+      where: { memberId: member.id },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Transform tickets to match frontend expectations
+    const transformedTickets = await Promise.all(tickets.map(async (ticket) => {
+      // Generate QR code for ticket
+      const { data, hash } = signPayloadWithFriendlyCode({
+        type: 'ticket',
+        ticketName: ticket.name,
+        memberId: ticket.memberId,
+        ticketId: ticket.id,
+      });
+      
+      const qrUrl = `${config.appUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${ticket.qrPayloadHash || hash}`;
+      const qrCode = await generateQRDataURL(qrUrl);
+
+      return {
+        id: ticket.id,
+        name: ticket.name,
+        eventName: ticket.name, // Use ticket name as event name
+        eventDate: ticket.validDate,
+        price: 0, // Free tickets
+        status: ticket.status.toLowerCase(),
+        qrCode: qrCode,
+        validUntil: ticket.validDate,
+        claimedAt: ticket.createdAt
+      };
+    }));
+
+    res.json(transformedTickets);
+  } catch (error: any) {
+    console.error('Get tickets error:', error);
+    res.status(500).json({ message: error?.message || 'Failed to fetch tickets' });
+  }
+});
+
+// GET /api/user-tickets - Get member's vouchers and other tickets (for My Ticket page)
+router.get('/user-tickets', authMiddleware, async (req: any, res) => {
+  try {
+    const userId = req.user.uid as string;
+    const member = await prisma.member.findUnique({ 
+      where: { userId },
+      include: { user: true }
+    });
+    
+    if (!member) {
+      return res.status(404).json({ message: 'Member not found' });
+    }
+
+    const userTickets = [];
+
+    // Get point redemptions (vouchers)
+    const pointRedemptions = await prisma.pointRedemption.findMany({
+      where: { 
+        memberId: member.id,
+        status: 'ACTIVE'
+      },
+      include: {
+        promo: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Transform point redemptions to voucher format
+    for (const redemption of pointRedemptions) {
+      // Generate QR code for voucher
+      const { data, hash } = signPayloadWithFriendlyCode({
+        type: 'voucher',
+        voucherName: redemption.rewardName,
+        memberId: member.id,
+        redemptionId: redemption.id,
+      });
+      
+      const qrUrl = `${config.appUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}`;
+      const qrCode = await generateQRDataURL(qrUrl);
+
+      userTickets.push({
+        id: redemption.id,
+        type: 'voucher',
+        name: redemption.rewardName,
+        description: redemption.promo?.description || 'Voucher Promo',
+        status: redemption.status.toLowerCase(),
+        validUntil: null, // PointRedemption doesn't have validUntil
+        claimedAt: redemption.createdAt,
+        qrCode: qrCode
+      });
+    }
+
+    // Get tourism ticket bookings
+    const tourismBookings = await prisma.tourismTicketBooking.findMany({
+      where: {
+        memberId: member.id,
+        status: 'PAID'
+      },
+      include: {
+        ticket: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Transform tourism bookings to ticket format
+    for (const booking of tourismBookings) {
+      // Generate QR code for tourism ticket booking
+      const qrData = booking.qrPayloadHash || '';
+      
+      userTickets.push({
+        id: booking.id,
+        type: 'ticket',
+        name: booking.ticket.name,
+        description: booking.ticket.description,
+        status: booking.status === 'PAID' ? 'active' : 'pending',
+        validUntil: booking.visitDate, // Use visitDate as validUntil
+        claimedAt: booking.createdAt,
+        qrCode: qrData
+      });
+    }
+
+    res.json(userTickets);
+  } catch (error: any) {
+    console.error('Get user tickets error:', error);
+    res.status(500).json({ message: error?.message || 'Failed to fetch user tickets' });
   }
 });
 

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { PrismaClient, RedemptionStatus, RegistrationStatus, TicketStatus, PromoType } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
-import { verifyPayload, verifyFriendlyVoucherCode } from '../utils/security';
+import { verifyPayload, verifyFriendlyVoucherCode, signPayloadWithFriendlyCode } from '../utils/security';
 import multer from 'multer';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
@@ -15,6 +15,7 @@ import { generateQRDataURL } from '../utils/qr'
 import { createRedeemProofPDF } from '../utils/pdf'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
+import { NotificationService } from '../utils/notificationService';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -147,7 +148,7 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
       
       const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
       
-      await prisma.redeemHistory.create({ 
+      const redeemHistory = await prisma.redeemHistory.create({ 
         data: { 
           memberId, 
           memberName, 
@@ -160,6 +161,15 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
           proofUrl 
         } 
       });
+
+      // Create notification for ticket redemption
+      try {
+        const { NotificationService } = await import('../utils/notificationService');
+        await NotificationService.createTicketClaimNotification(memberId, voucherLabel || 'Tiket', redeemHistory.id);
+      } catch (notifError) {
+        console.error('Error creating ticket claim notification:', notifError);
+        // Don't fail the redemption if notification fails
+      }
 
       result = {
         success: true,
@@ -225,7 +235,7 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
         
         const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
         
-        await prisma.redeemHistory.create({ 
+        const redeemHistory = await prisma.redeemHistory.create({ 
           data: { 
             memberId, 
             memberName, 
@@ -238,6 +248,15 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
             proofUrl 
           } 
         });
+
+        // Create notification for point redemption
+        try {
+          const { NotificationService } = await import('../utils/notificationService');
+          await NotificationService.createTicketClaimNotification(memberId, voucherLabel || 'Redeem Poin', redeemHistory.id);
+        } catch (notifError) {
+          console.error('Error creating point redemption notification:', notifError);
+          // Don't fail the redemption if notification fails
+        }
 
         result = {
           success: true,
@@ -636,6 +655,100 @@ router.get('/overview', adminAuth, async (_req, res) => {
   }
 });
 
+// Search member by ID, phone, or email
+router.get('/search-member', adminAuth, async (req, res) => {
+  try {
+    const { query } = req.query;
+    
+    if (!query || typeof query !== 'string') {
+      return res.status(400).json({ message: 'Query parameter is required' });
+    }
+
+    const searchQuery = query.trim();
+    
+    // Search by member ID, phone, or email
+    const member = await prisma.member.findFirst({
+      where: {
+        OR: [
+          { id: searchQuery },
+          { phone: searchQuery },
+          { user: { email: searchQuery } }
+        ]
+      },
+      include: {
+        user: {
+          select: {
+            email: true,
+            fullName: true
+          }
+        }
+      }
+    });
+
+    if (!member) {
+      return res.status(404).json({ message: 'Member tidak ditemukan' });
+    }
+
+    // Record admin activity
+    try {
+      const adminUser = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
+      await recordAdminActivity({
+        adminId: (req as any).user.uid,
+        adminName: adminUser?.fullName || 'Unknown',
+        adminRole: (req as any).user.adminRole,
+        method: 'GET',
+        path: '/api/admin/search-member',
+        status: 200,
+        ip: req.ip,
+        ua: req.headers['user-agent'],
+        body: {},
+        query: req.query,
+        description: `Searched for member: ${searchQuery}`
+      });
+    } catch (activityError) {
+      console.error('Failed to record admin activity:', activityError);
+    }
+
+    res.json({
+      id: member.id,
+      fullName: member.user?.fullName || member.fullName,
+      email: member.user?.email,
+      phoneNumber: member.phone, // Use phone field from schema
+      points: member.pointsBalance, // Use pointsBalance field from schema
+      membershipNumber: member.membershipNumber || member.id, // Use actual membershipNumber or fallback to ID
+      level: member.isLifetime ? 'LIFETIME' : 'REGULAR',
+      membershipLevel: member.isLifetime ? 'LIFETIME' : 'REGULAR',
+      isActive: member.user?.isActive ?? true,
+      isLifetime: member.isLifetime
+    });
+
+  } catch (error) {
+    console.error('Search member error:', error);
+    
+    // Record failed activity
+    try {
+      const adminUser = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
+      await recordAdminActivity({
+        adminId: (req as any).user.uid,
+        adminName: adminUser?.fullName || 'Unknown',
+        adminRole: (req as any).user.adminRole,
+        method: 'GET',
+        path: '/api/admin/search-member',
+        status: 500,
+        ip: req.ip,
+        ua: req.headers['user-agent'],
+        body: {},
+        query: req.query,
+        description: `Failed to search member: ${req.query.query}`
+      });
+    } catch (activityError) {
+      console.error('Failed to record admin activity:', activityError);
+    }
+
+    res.status(500).json({ message: 'Gagal mencari member' });
+  }
+});
+
 // ==== Analytics Helpers ====
 function buildBuckets(period: 'daily'|'weekly'|'monthly', count: number) {
   const now = dayjs();
@@ -961,29 +1074,50 @@ router.get('/members', adminAuth, async (req, res) => {
       include: { user: true },
       orderBy: { registrationDate: 'desc' },
       take: limitNum,
+      where: {
+        // Exclude admin from members list
+        user: {
+          role: {
+            not: 'ADMIN'
+          }
+        }
+      }
     };
     
     // Add search functionality
     if (search && search.trim()) {
       const searchTerm = search.trim();
       findOpts.where = {
-        OR: [
-          {
-            fullName: {
-              contains: searchTerm
-            }
-          },
-          {
-            phone: {
-              contains: searchTerm
-            }
-          },
+        AND: [
+          // Keep the admin exclusion
           {
             user: {
-              email: {
-                contains: searchTerm
+              role: {
+                not: 'ADMIN'
               }
             }
+          },
+          // Add search conditions
+          {
+            OR: [
+              {
+                fullName: {
+                  contains: searchTerm
+                }
+              },
+              {
+                phone: {
+                  contains: searchTerm
+                }
+              },
+              {
+                user: {
+                  email: {
+                    contains: searchTerm
+                  }
+                }
+              }
+            ]
           }
         ]
       };
@@ -1163,10 +1297,28 @@ router.delete('/registration-codes/:id', adminAuth, async (req, res) => {
 
 // Announcements
 router.post('/announcements', adminAuth, async (req, res) => {
-  const { title, description, imageUrl } = req.body as { title: string; description: string; imageUrl?: string };
-  if (!title || !description) return res.status(400).json({ message: 'Missing fields' });
-  const created = await prisma.announcement.create({ data: { title, description, imageUrl, createdBy: 'admin', postedAt: new Date() } });
-  res.json(created);
+  try {
+    const { title, description, imageUrl } = req.body as { title: string; description: string; imageUrl?: string };
+    if (!title || !description) return res.status(400).json({ message: 'Missing fields' });
+    
+    const created = await prisma.announcement.create({ 
+      data: { title, description, imageUrl, createdBy: 'admin', postedAt: new Date() } 
+    });
+    
+    // Create notifications for all active members
+    try {
+      const { NotificationService } = await import('../utils/notificationService');
+      await NotificationService.createAnnouncementNotification(created.id, title, description);
+    } catch (notifError) {
+      console.error('Error creating announcement notifications:', notifError);
+      // Don't fail the announcement creation if notification fails
+    }
+    
+    res.json(created);
+  } catch (error) {
+    console.error('Error creating announcement:', error);
+    res.status(500).json({ message: 'Failed to create announcement' });
+  }
 });
 
 // Events CRUD
@@ -4080,9 +4232,9 @@ router.post('/members/:id/adjust-points', adminAuth, async (req, res) => {
     });
 
     // Record the transaction
-    await prisma.pointTransaction.create({
+    await prisma.pointAdjustment.create({
       data: {
-        userId: id,
+        memberId: member.id,
         points: points,
         type: points > 0 ? 'EARNED' : 'SPENT',
         description: reason || 'Admin adjustment',
@@ -4210,12 +4362,13 @@ router.get('/tickets', adminAuth, async (req, res) => {
 // GET /api/admin/point-redemptions - Get point redemptions for redeem voucher
 router.get('/point-redemptions', adminAuth, async (req, res) => {
   try {
-    const redemptions = await prisma.pointTransaction.findMany({
-      where: { type: 'SPENT' },
+    const redemptions = await prisma.pointRedemption.findMany({
       include: {
-        user: {
-          select: {
-            id: true,
+        member: {
+          include: {
+            user: {
+              select: {
+                id: true,
             email: true,
             memberProfile: {
               select: {
@@ -4240,13 +4393,14 @@ router.get('/event-registrations', adminAuth, async (req, res) => {
   try {
     const registrations = await prisma.eventRegistration.findMany({
       include: {
-        user: {
+        member: {
           select: {
             id: true,
-            email: true,
-            memberProfile: {
+            fullName: true,
+            user: {
               select: {
-                fullName: true
+                id: true,
+                email: true
               }
             }
           }
@@ -4265,6 +4419,163 @@ router.get('/event-registrations', adminAuth, async (req, res) => {
   } catch (error: any) {
     console.error('Get event registrations error:', error);
     res.status(500).json({ message: error?.message || 'Failed to get event registrations' });
+  }
+});
+
+// POST /api/admin/create-ticket-for-member - Admin creates ticket for specific member
+router.post('/create-ticket-for-member', adminAuth, async (req, res) => {
+  try {
+    const { memberId, memberEmail, ticketName, description, validUntil } = req.body;
+
+    if (!ticketName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nama tiket harus diisi'
+      });
+    }
+
+    let member;
+    
+    // Find member by ID or email
+    if (memberId) {
+      member = await prisma.member.findUnique({
+        where: { id: memberId },
+        include: { user: true }
+      });
+    } else if (memberEmail) {
+      const user = await prisma.user.findUnique({
+        where: { email: memberEmail },
+        include: { memberProfile: true }
+      });
+      member = user?.memberProfile;
+    }
+
+    if (!member) {
+      return res.status(404).json({
+        success: false,
+        message: 'Member tidak ditemukan'
+      });
+    }
+
+    // Generate friendly code and QR payload
+    const { data, hash, friendlyCode } = signPayloadWithFriendlyCode({
+      type: 'ticket',
+      ticketName: ticketName,
+      memberId: member.id,
+      ticketId: `temp-${Date.now()}`, // Will be updated after creation
+    });
+
+    // Create the ticket
+    const ticket = await prisma.ticket.create({
+      data: {
+        name: ticketName,
+        validDate: validUntil ? new Date(validUntil) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Default 30 days
+        status: 'ACTIVE',
+        qrPayloadHash: hash,
+        friendlyCode: friendlyCode,
+        memberId: member.id
+      }
+    });
+
+    // Update QR payload with actual ticket ID
+    const updatedPayload = signPayloadWithFriendlyCode({
+      type: 'ticket',
+      ticketName: ticketName,
+      memberId: member.id,
+      ticketId: ticket.id,
+    });
+
+    await prisma.ticket.update({
+      where: { id: ticket.id },
+      data: { qrPayloadHash: updatedPayload.hash }
+    });
+
+    // Send notification to member
+    try {
+      await NotificationService.createTicketClaimNotification(member.id, ticket.name, undefined);
+    } catch (notifError) {
+      console.error('Failed to send notification:', notifError);
+    }
+
+    // Log admin activity
+    const adminUser = await prisma.user.findUnique({ where: { id: (req as any).user!.uid } });
+    await prisma.adminActivity.create({
+      data: {
+        adminId: (req as any).user!.uid,
+        adminName: adminUser?.fullName || 'Unknown Admin',
+        adminRole: (req as any).user!.adminRole || 'SUPER_ADMIN', // Default to SUPER_ADMIN if null
+        method: req.method,
+        path: req.path,
+        status: 200,
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
+        requestBody: JSON.stringify(req.body),
+        query: JSON.stringify(req.query)
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Tiket berhasil dibuat untuk member',
+      data: {
+        ticket,
+        memberName: member.fullName,
+        memberEmail: member.user?.email
+      }
+    });
+  } catch (error: any) {
+    console.error('Error creating ticket for member:', error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || 'Gagal membuat tiket untuk member'
+    });
+  }
+});
+
+// GET /api/admin/member-tickets - Get all member tickets for admin view
+router.get('/member-tickets', adminAuth, async (req, res) => {
+  try {
+    const tickets = await prisma.ticket.findMany({
+      include: {
+        member: {
+          include: {
+            user: {
+              select: {
+                email: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    const formattedTickets = tickets.map(ticket => ({
+      id: ticket.id,
+      name: ticket.name,
+      description: ticket.description,
+      validDate: ticket.validDate,
+      status: ticket.status,
+      friendlyCode: ticket.friendlyCode,
+      member: {
+        name: ticket.member.name,
+        email: ticket.member.user?.email || 'No email'
+      },
+      createdAt: ticket.createdAt
+    }));
+
+    res.json({
+      success: true,
+      tickets: formattedTickets
+    });
+  } catch (error: any) {
+    console.error('Error getting member tickets:', error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || 'Gagal mengambil daftar tiket member'
+    });
   }
 });
 
