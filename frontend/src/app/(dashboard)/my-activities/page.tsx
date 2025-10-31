@@ -159,17 +159,17 @@ export default function MyActivitiesPage() {
   const getActivityColor = (type: string) => {
     switch (type) {
       case 'BOOK':
-        return 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800';
+        return 'bg-blue-50 border-blue-200';
       case 'CANCEL':
-        return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800';
+        return 'bg-red-50 border-red-200';
       case 'REDEEM':
-        return 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800';
+        return 'bg-green-50 border-green-200';
       case 'PROFILE':
-        return 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800';
+        return 'bg-purple-50 border-purple-200';
       case 'POINTS':
-        return 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800';
+        return 'bg-yellow-50 border-yellow-200';
       default:
-        return 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700';
+        return 'bg-gray-50 border-gray-200';
     }
   };
 
@@ -180,47 +180,47 @@ export default function MyActivitiesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Memuat aktivitas...</p>
+          <p className="text-gray-600">Memuat aktivitas...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-6">
+    <div className="min-h-screen bg-white py-6">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-6">
           <Link 
             href="/profile" 
-            className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mb-4"
+            className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-4"
           >
             <IconArrowLeft className="w-5 h-5 mr-2" />
             Kembali ke Profil
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Aktivitas Saya</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">Riwayat aktivitas dan transaksi Anda</p>
+          <h1 className="text-3xl font-bold text-gray-900">Aktivitas Saya</h1>
+          <p className="text-gray-600 mt-2">Riwayat aktivitas dan transaksi Anda</p>
         </div>
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-            <p className="text-red-700 dark:text-red-400">{error}</p>
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-700">{error}</p>
           </div>
         )}
 
         {/* Filter Buttons */}
-        <div className="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-md p-4">
+        <div className="mb-6 bg-white rounded-xl shadow-md p-4">
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setFilter('all')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === 'all'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Semua
@@ -230,7 +230,7 @@ export default function MyActivitiesPage() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === 'BOOK'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Booking
@@ -240,7 +240,7 @@ export default function MyActivitiesPage() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === 'REDEEM'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Redeem
@@ -250,7 +250,7 @@ export default function MyActivitiesPage() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === 'POINTS'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Poin
@@ -260,7 +260,7 @@ export default function MyActivitiesPage() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === 'PROFILE'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Profil
@@ -271,12 +271,12 @@ export default function MyActivitiesPage() {
         {/* Activities List */}
         <div className="space-y-4">
           {filteredActivities.length === 0 ? (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-8 text-center">
+            <div className="bg-white rounded-xl shadow-md p-8 text-center">
               <IconClock className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
                 Belum Ada Aktivitas
               </h3>
-              <p className="text-gray-600 dark:text-gray-400">
+              <p className="text-gray-600">
                 {filter === 'all' 
                   ? 'Anda belum memiliki aktivitas apapun'
                   : `Tidak ada aktivitas ${filter.toLowerCase()} yang ditemukan`
@@ -294,15 +294,15 @@ export default function MyActivitiesPage() {
                     {getActivityIcon(activity.type)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">
                       {activity.title}
                     </h3>
                     {activity.detail && (
-                      <p className="text-gray-600 dark:text-gray-400 mb-2">
+                      <p className="text-gray-600 mb-2">
                         {activity.detail}
                       </p>
                     )}
-                    <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center gap-4 text-sm text-gray-500">
                       <div className="flex items-center gap-1">
                         <IconCalendar className="w-4 h-4" />
                         {new Date(activity.createdAt).toLocaleDateString('id-ID', {

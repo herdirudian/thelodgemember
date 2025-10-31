@@ -12,6 +12,7 @@ type AdminNavProps = {
     | "slider"
     | "vouchers"
     | "redeem-voucher"
+    | "member-tickets"
     | "activities"
     | "member-activities"
     | "admins"
@@ -64,6 +65,7 @@ export default function AdminNav({ active = "overview" }: AdminNavProps) {
             {item("slider", "Slider", "/admin#slider")}
             {item("vouchers", "Vouchers", "/admin#vouchers")}
             {item("redeem-voucher", "Redeem Voucher", "/admin#redeem-voucher")}
+            {item("member-tickets", "Member Tickets", "/admin#member-tickets")}
             {item("registration-codes", "Registration Codes", "/admin#registration-codes")}
             {item("activities", "Activities", "/admin#activities")}
             {item("member-activities", "Member Activities", "/admin#member-activities")}

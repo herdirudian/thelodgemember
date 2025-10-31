@@ -2,931 +2,607 @@
 import { useEffect, useState } from "react";
 
 export default function MyTicketPage() {
-  const [tickets, setTickets] = useState<any[]>([]);
+  const [user, setUser] = useState(null);
+  const [benefits, setBenefits] = useState([]);
+  const [tickets, setTickets] = useState([]);
+  const [userTickets, setUserTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [expandedPromoId, setExpandedPromoId] = useState(null);
+  const [redeemingBenefitId, setRedeemingBenefitId] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
-  const [benefits, setBenefits] = useState<any[]>([]);
-  const [benefitLoading, setBenefitLoading] = useState(false);
-  const [benefitError, setBenefitError] = useState("");
-  const [expandedPromoId, setExpandedPromoId] = useState<string | null>(null);
-  const [redemptions, setRedemptions] = useState<any[]>([]);
-  const [redeemingBenefitId, setRedeemingBenefitId] = useState<string | null>(null);
+  const [selectedTicket, setSelectedTicket] = useState(null);
   const [showEVoucher, setShowEVoucher] = useState(false);
-  const [currentVoucher, setCurrentVoucher] = useState<any | null>(null);
-  
-  // New states for claimed tickets
-  const [claimedTickets, setClaimedTickets] = useState<any[]>([]);
-  const [claimedTicketsLoading, setClaimedTicketsLoading] = useState(true);
-  const [claimedTicketsError, setClaimedTicketsError] = useState("");
-  const [ticketFilter, setTicketFilter] = useState("ALL"); // ALL, ACTIVE, USED, EXPIRED
-  const [selectedClaimedTicket, setSelectedClaimedTicket] = useState<any | null>(null);
-
-  // New states for vouchers
-  const [vouchers, setVouchers] = useState<any[]>([]);
-  const [vouchersLoading, setVouchersLoading] = useState(true);
-  const [vouchersError, setVouchersError] = useState("");
-  const [voucherFilter, setVoucherFilter] = useState("ALL"); // ALL, ACTIVE, USED, EXPIRED
+  const [currentVoucher, setCurrentVoucher] = useState(null);
 
   useEffect(() => {
-    loadTickets();
-    loadBenefits();
-    loadMyRedemptions();
-    loadClaimedTickets();
-    loadVouchers();
+    fetchUserData();
+    fetchBenefits();
+    fetchTickets();
+    fetchUserTickets();
   }, []);
 
-  async function loadTickets() {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      window.location.href = "/login";
-      return;
-    }
-    
-    setLoading(true);
-    setError("");
+  const fetchUserData = async () => {
     try {
-      const res = await fetch(`/api/member/tickets/my`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const body = await res.json();
-      if (!res.ok) {
-        if (res.status === 401) {
-          try { localStorage.removeItem("token"); } catch {}
-          window.location.href = "/login";
-          return;
-        }
-        throw new Error(body.message || "Failed to load tickets");
+      const token = localStorage.getItem("token");
+      if (!token) {
+        window.location.href = "/login";
+        return;
       }
-      setTickets(body.tickets || []);
-    } catch (e: any) {
-      setError(e.message || "Something went wrong");
+
+      const response = await fetch("/api/auth/me", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
+      } else {
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+      }
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+      localStorage.removeItem("token");
+      window.location.href = "/login";
+    }
+  };
+
+  const fetchBenefits = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("/api/member/benefits", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setBenefits(data);
+      }
+    } catch (error) {
+      console.error("Error fetching benefits:", error);
+    }
+  };
+
+  const fetchTickets = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("/api/tickets", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setTickets(data);
+      }
+    } catch (error) {
+      console.error("Error fetching tickets:", error);
+    }
+  };
+
+  const fetchUserTickets = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("/api/user-tickets", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUserTickets(data);
+      }
+    } catch (error) {
+      console.error("Error fetching user tickets:", error);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  async function loadBenefits() {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-    
-    setBenefitLoading(true);
-    setBenefitError("");
+  const redeemBenefit = async (benefitId) => {
     try {
-      const res = await fetch(`/api/member/benefits`, {
-        headers: { Authorization: `Bearer ${token}` },
+      setRedeemingBenefitId(benefitId);
+      const token = localStorage.getItem("token");
+      const response = await fetch(`/api/member/benefits/${benefitId}/redeem`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
       });
-      const body = await res.json();
-      if (!res.ok) {
-        if (res.status === 401) {
-          try { localStorage.removeItem("token"); } catch {}
-          window.location.href = "/login";
-          return;
-        }
-        throw new Error(body.message || "Failed to load benefits");
+
+      if (response.ok) {
+        const result = await response.json();
+        alert("Benefit berhasil diredeem!");
+        fetchBenefits();
+        fetchUserTickets();
+      } else {
+        const errorData = await response.json();
+        alert(errorData.message || "Gagal redeem benefit");
       }
-      setBenefits(body || []);
-    } catch (e: any) {
-      setBenefitError(e.message || "Failed to load benefits");
+    } catch (error) {
+      console.error("Error redeeming benefit:", error);
+      alert("Terjadi kesalahan saat redeem benefit");
     } finally {
-      setBenefitLoading(false);
+      setRedeemingBenefitId(null);
     }
-  }
+  };
 
-  async function loadMyRedemptions() {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-    
+  const openPreview = (ticket) => {
+    setSelectedTicket(ticket);
+    setPreviewOpen(true);
+  };
+
+  const closePreview = () => {
+    setPreviewOpen(false);
+    setSelectedTicket(null);
+  };
+
+  const downloadTicketPNG = async (ticket) => {
     try {
-      const res = await fetch(`/api/member/benefits/my-redemptions`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const body = await res.json();
-      if (res.ok) {
-        setRedemptions(body || []);
-      }
-    } catch (e: any) {
-      console.error('Failed to load redemptions:', e);
-    }
-  }
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = 400;
+      canvas.height = 400;
 
-  async function loadClaimedTickets() {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      window.location.href = "/login";
-      return;
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, 400, 400);
+
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        ctx.drawImage(img, 50, 50, 300, 300);
+        
+        const link = document.createElement("a");
+        link.download = `ticket-${ticket.name}.png`;
+        link.href = canvas.toDataURL();
+        link.click();
+      };
+      img.src = ticket.qrCode;
+    } catch (error) {
+      console.error("Error downloading ticket:", error);
+      alert("Gagal download tiket");
     }
-    
-    setClaimedTicketsLoading(true);
-    setClaimedTicketsError("");
+  };
+
+  const downloadEvoucherPNG = async (voucher) => {
     try {
-      const res = await fetch(`/api/member/bookings/tourism-tickets`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      
-      if (!res.ok) {
-        if (res.status === 401) {
-          try { localStorage.removeItem("token"); } catch {}
-          window.location.href = "/login";
-          return;
-        }
-        throw new Error("Failed to load claimed tickets");
-      }
-      
-      const body = await res.json();
-      setClaimedTickets(body.tickets || []);
-    } catch (e: any) {
-      console.log("Failed to load claimed tickets:", e.message);
-      setClaimedTicketsError("Gagal memuat tiket yang diklaim. Silakan coba lagi.");
-      setClaimedTickets([]);
-    } finally {
-      setClaimedTicketsLoading(false);
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = 400;
+      canvas.height = 400;
+
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, 400, 400);
+
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        ctx.drawImage(img, 50, 50, 300, 300);
+        
+        const link = document.createElement("a");
+        link.download = `evoucher-${voucher.voucherCode}.png`;
+        link.href = canvas.toDataURL();
+        link.click();
+      };
+      img.src = voucher.qrCode;
+    } catch (error) {
+      console.error("Error downloading e-voucher:", error);
+      alert("Gagal download e-voucher");
     }
-  }
+  };
 
-  async function loadVouchers() {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      window.location.href = "/login";
-      return;
-    }
-    
-    setVouchersLoading(true);
-    setVouchersError("");
-    try {
-      const res = await fetch(`/api/member/promos/my-vouchers`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const body = await res.json();
-      if (!res.ok) {
-        if (res.status === 401) {
-          try { localStorage.removeItem("token"); } catch {}
-          window.location.href = "/login";
-          return;
-        }
-        throw new Error(body.message || "Failed to load vouchers");
-      }
-      setVouchers(body.vouchers || []);
-    } catch (err: any) {
-      console.error("Load vouchers error:", err);
-      setVouchersError(err.message || "Failed to load vouchers");
-    } finally {
-      setVouchersLoading(false);
-    }
-  }
+  const printEvoucher = (voucher) => {
+    const printWindow = window.open("", "_blank");
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>E-Voucher - ${voucher.benefit?.title || 'Voucher'}</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+            .voucher { border: 2px solid #0F4D39; padding: 20px; margin: 20px auto; max-width: 400px; }
+            .qr-code { margin: 20px 0; }
+            .voucher-code { font-family: monospace; font-size: 18px; font-weight: bold; color: #0F4D39; }
+          </style>
+        </head>
+        <body>
+          <div class="voucher">
+            <h2>${voucher.benefit?.title || 'E-Voucher'}</h2>
+            <p>${voucher.benefit?.description || ''}</p>
+            <div class="qr-code">
+              <img src="${voucher.qrCode}" alt="QR Code" style="width: 200px; height: 200px;" />
+            </div>
+            <div class="voucher-code">${voucher.voucherCode || 'N/A'}</div>
+            <p><small>Tanggal Redeem: ${voucher.redeemedAt ? new Date(voucher.redeemedAt).toLocaleDateString('id-ID') : 'N/A'}</small></p>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  };
 
-  // Helper functions for claimed tickets
-  function getFilteredClaimedTickets() {
-    if (ticketFilter === "ALL") return claimedTickets;
-    return claimedTickets.filter(ticket => ticket.status === ticketFilter);
-  }
-
-  // Helper functions for vouchers
-  function getFilteredVouchers() {
-    if (voucherFilter === "ALL") return vouchers;
-    return vouchers.filter(voucher => voucher.status === voucherFilter);
-  }
-
-  function getStatusBadgeColor(status: string) {
+  const getStatusIcon = (status) => {
     switch (status) {
-      case "ACTIVE":
-        return "bg-green-50 text-green-700 border-green-200";
-      case "USED":
-        return "bg-gray-50 text-gray-700 border-gray-200";
-      case "EXPIRED":
-        return "bg-red-50 text-red-700 border-red-200";
-      default:
-        return "bg-gray-50 text-gray-700 border-gray-200";
-    }
-  }
-
-  function getStatusIcon(status: string) {
-    switch (status) {
-      case "ACTIVE":
+      case "active":
         return "✓";
-      case "USED":
+      case "used":
         return "✓";
-      case "EXPIRED":
+      case "expired":
         return "⚠";
       default:
         return "•";
     }
-  }
+  };
 
-  function formatPrice(price: number) {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(price);
-  }
-
-  function openClaimedTicketDetail(ticket: any) {
-    setSelectedClaimedTicket(ticket);
-  }
-
-  function closeClaimedTicketDetail() {
-    setSelectedClaimedTicket(null);
-  }
-
-  function logout() {
-    try { localStorage.removeItem("token"); } catch {}
-    window.location.href = "/login";
-  }
-
-  function openPreview(t: any) {
-    setSelectedTicket(t);
-    setPreviewOpen(true);
-  }
-
-  function closePreview() {
-    setPreviewOpen(false);
-    setSelectedTicket(null);
-  }
-
-  async function redeemBenefit(benefitId: string) {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      window.location.href = "/login";
-      return;
-    }
-
-    setRedeemingBenefitId(benefitId);
-    try {
-      const res = await fetch(`/api/member/benefits/${benefitId}/redeem`, {
-        method: 'POST',
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-      });
-      const body = await res.json();
-      
-      if (!res.ok) {
-        if (res.status === 401) {
-          try { localStorage.removeItem("token"); } catch {}
-          window.location.href = "/login";
-          return;
-        }
-        throw new Error(body.message || "Failed to redeem benefit");
-      }
-      
-      // Reload redemptions to get the updated list
-      await loadMyRedemptions();
-      alert("Benefit berhasil diredeem!");
-    } catch (e: any) {
-      alert(e.message || "Failed to redeem benefit");
-    } finally {
-      setRedeemingBenefitId(null);
-    }
-  }
-
-  function isAlreadyRedeemed(benefitId: string) {
-    return redemptions.some(r => r.benefitId === benefitId);
-  }
-
-  function getRedemptionForBenefit(benefitId: string) {
-    return redemptions.find(r => r.benefitId === benefitId);
-  }
-
-  function viewVoucher(benefitId: string) {
-    const redemption = getRedemptionForBenefit(benefitId);
-    if (redemption) {
-      setCurrentVoucher(redemption);
-      setShowEVoucher(true);
-    }
-  }
-
-  function downloadEvoucherPNG(redemption: any) {
-    if (!redemption.qrCode) {
-      alert("QR Code tidak tersedia");
-      return;
-    }
-    
-    const link = document.createElement('a');
-    link.download = `evoucher-${redemption.voucherCode || 'voucher'}.png`;
-    link.href = redemption.qrCode;
-    link.click();
-  }
-
-  function printEvoucher(redemption: any) {
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>E-Voucher - ${redemption.benefit?.title || 'Voucher'}</title>
-            <style>
-              body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
-              .voucher { border: 2px solid #0F4D39; padding: 20px; margin: 20px auto; max-width: 400px; }
-              .qr-code { margin: 20px 0; }
-              .voucher-code { font-size: 18px; font-weight: bold; margin: 10px 0; }
-            </style>
-          </head>
-          <body>
-            <div class="voucher">
-              <h2>${redemption.benefit?.title || 'E-Voucher'}</h2>
-              <p>${redemption.benefit?.description || ''}</p>
-              <div class="voucher-code">Kode: ${redemption.voucherCode || 'N/A'}</div>
-              <div class="qr-code">
-                <img src="${redemption.qrCode}" alt="QR Code" style="width: 200px; height: 200px;" />
-              </div>
-              <p>Tanggal Redeem: ${redemption.redeemedAt ? new Date(redemption.redeemedAt).toLocaleDateString('id-ID') : 'N/A'}</p>
-            </div>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.print();
-    }
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-gray-800 text-xl">Loading...</div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white shadow-sm border-b">
+    <div className="min-h-screen bg-white">
+      {/* Professional Header */}
+      <div className="bg-gray-100 border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <h1 className="text-2xl font-bold text-[#0F4D39]">My Tickets</h1>
-            <button
-              onClick={logout}
-              className="px-4 py-2 text-sm text-red-600 hover:text-red-800 transition"
-            >
-              Logout
-            </button>
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-3">
+              <span className="text-gray-800 text-lg sm:text-xl font-bold">🎫</span>
+              <h1 className="text-gray-800 text-lg sm:text-xl font-bold">My Tickets</h1>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="space-y-8">
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div className="space-y-8 sm:space-y-10">
+          
           {/* Benefit Member Section */}
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-[#0F4D39] mb-4">Benefit Member</h2>
-            {benefitError && <div className="text-red-600 text-sm mb-2">{benefitError}</div>}
-            
-            {benefitLoading ? (
-              <div className="grid md:grid-cols-2 gap-4">
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="card p-6 animate-pulse">
-                    <div className="flex items-start gap-4">
-                      <div className="w-20 h-20 bg-gray-200 rounded-lg"></div>
-                      <div className="flex-1 space-y-2">
-                        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                        <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                        <div className="h-3 bg-gray-200 rounded w-1/3"></div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 sm:p-8 shadow-lg">
+            <div className="flex items-center space-x-3 mb-6">
+              <span className="text-gray-800 text-lg">🎁</span>
+              <h2 className="text-gray-800 text-xl sm:text-2xl font-bold">Benefit Member</h2>
+            </div>
+
+            {benefits.length === 0 ? (
+              <div className="text-center py-8">
+                <span className="text-red-500">⚠️</span>
+                <p className="text-gray-600 mt-2">Belum ada benefit tersedia</p>
               </div>
             ) : (
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:gap-6">
                 {benefits.map((benefit) => (
-                  <div key={benefit.id} className="rounded-lg border border-gray-200 p-4 bg-white shadow-sm">
-                    <div className="flex items-start gap-4">
-                      {benefit.imageUrl ? (
-                        <img src={benefit.imageUrl} alt={benefit.title} className="w-20 h-20 object-cover rounded-lg" />
-                      ) : (
-                        <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-[#0F4D39] to-[#0e3f30] flex items-center justify-center">
-                          <span className="text-white text-2xl">🎁</span>
-                        </div>
-                      )}
-                      <div className="flex-1">
-                        <div className="text-[#0F4D39] font-semibold text-lg">{benefit.title}</div>
-                        <div className="text-sm text-gray-600 mt-1 line-clamp-2">{benefit.description}</div>
-                        {benefit.validUntil && (
-                          <div className="text-xs text-gray-500 mt-2 flex items-center">
-                            <span className="mr-1">📅</span>
-                            Berlaku hingga: {new Date(benefit.validUntil).toLocaleDateString('id-ID')}
+                  <div key={benefit.id} className="bg-white rounded-lg p-4 sm:p-6 border border-gray-200 shadow-sm">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <span className="text-gray-800 text-2xl">🎁</span>
+                        <div>
+                          <h3 className="text-gray-800 font-semibold text-lg break-words">{benefit.title}</h3>
+                          <div className="flex items-center space-x-2 text-sm text-gray-600 mt-1">
+                            <span className="mr-2 text-base">📅</span>
+                            <span>Berlaku hingga: {benefit.validUntil ? new Date(benefit.validUntil).toLocaleDateString('id-ID') : 'Tidak terbatas'}</span>
                           </div>
-                        )}
-                        <div className="mt-3 flex gap-2">
-                          <button 
-                            onClick={() => setExpandedPromoId(expandedPromoId === benefit.id ? null : benefit.id)} 
-                            className="px-3 py-1.5 text-sm rounded-lg border border-[#0F4D39] text-[#0F4D39] hover:bg-[#f0f8f6] transition"
-                          >
-                            {expandedPromoId === benefit.id ? 'Tutup' : 'Selengkapnya'}
-                          </button>
-                          {isAlreadyRedeemed(benefit.id) ? (
-                            <div className="flex gap-2">
-                              <span className="px-3 py-1.5 text-sm rounded-lg bg-green-100 text-green-700 border border-green-200">
-                                ✓ Sudah Diredeem
-                              </span>
-                              <button 
-                                onClick={() => viewVoucher(benefit.id)}
-                                className="px-3 py-1.5 text-sm rounded-lg bg-[#0F4D39] text-white hover:bg-[#0e3f30] transition"
-                              >
-                                Lihat Voucher
-                              </button>
-                            </div>
-                          ) : (
-                            <button 
-                              onClick={() => redeemBenefit(benefit.id)}
-                              disabled={redeemingBenefitId === benefit.id}
-                              className="px-3 py-1.5 text-sm rounded-lg bg-[#0F4D39] text-white hover:bg-[#0e3f30] transition disabled:opacity-50"
-                            >
-                              {redeemingBenefitId === benefit.id ? 'Redeeming...' : 'Redeem'}
-                            </button>
-                          )}
                         </div>
-                        
-                        {expandedPromoId === benefit.id && (
-                          <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                            <div className="text-sm text-gray-700">
-                              <div className="font-medium mb-2">Detail Benefit:</div>
-                              <div className="space-y-1">
-                                <div>• {benefit.description}</div>
-                                {benefit.terms && benefit.terms.map((term: string, idx: number) => (
-                                  <div key={idx}>• {term}</div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        )}
                       </div>
+                      <button
+                        onClick={() => setExpandedPromoId(expandedPromoId === benefit.id ? null : benefit.id)}
+                        className="text-gray-600 hover:text-gray-800 text-sm px-3 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 transition-all"
+                      >
+                        {expandedPromoId === benefit.id ? '🔼 Tutup' : '🔽 Selengkapnya'}
+                      </button>
                     </div>
+
+                    {benefit.isRedeemed ? (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                        ✓ Sudah Diredeem
+                      </span>
+                    ) : benefit.userVouchers && benefit.userVouchers.length > 0 ? (
+                      <button
+                        onClick={() => {
+                          setCurrentVoucher(benefit.userVouchers[0]);
+                          setShowEVoucher(true);
+                        }}
+                        className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all text-sm font-medium"
+                      >
+                        👁️ Lihat Voucher
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => redeemBenefit(benefit.id)}
+                        disabled={redeemingBenefitId === benefit.id}
+                        className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-all text-sm font-medium"
+                      >
+                        {redeemingBenefitId === benefit.id ? '⏳ Redeeming...' : '🎯 Redeem'}
+                      </button>
+                    )}
+
+                    {expandedPromoId === benefit.id && (
+                      <div className="mt-4 space-y-3">
+                        <div className="flex items-start space-x-2">
+                          <span className="mr-2">📋</span>
+                          <div className="text-gray-700 text-sm">
+                            <div className="break-words bg-gray-50 rounded-lg p-3 shadow-sm border border-gray-200">• {benefit.description}</div>
+                            {benefit.terms && benefit.terms.map((term, idx) => (
+                              <div key={idx} className="break-words bg-gray-50 rounded-lg p-3 shadow-sm border border-gray-200">• {term}</div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
-                
-                {benefits.length === 0 && (
-                  <div className="col-span-2 rounded-lg border border-gray-200 p-6 text-center">
-                    <div className="text-gray-400 text-4xl mb-2">🎁</div>
-                    <div className="text-sm text-gray-600">Belum ada benefit yang tersedia.</div>
-                    <div className="text-xs text-gray-500 mt-1">Benefit member akan muncul di sini.</div>
-                  </div>
-                )}
+              </div>
+            )}
+
+            {benefits.length === 0 && (
+              <div className="text-center py-12">
+                <div className="text-gray-400 text-3xl sm:text-4xl mb-2">🎁</div>
+                <p className="text-gray-600">Belum ada benefit member tersedia</p>
               </div>
             )}
           </div>
 
-          {/* Claimed Tourism Tickets Section */}
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-[#0F4D39]">Tiket Diklaim</h2>
-              <div className="flex gap-2">
-                <select
-                  value={ticketFilter}
-                  onChange={(e) => setTicketFilter(e.target.value)}
-                  className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#0F4D39] focus:border-transparent"
-                >
-                  <option value="ALL">Semua Status</option>
-                  <option value="ACTIVE">Aktif</option>
-                  <option value="USED">Terpakai</option>
-                  <option value="EXPIRED">Expired</option>
-                </select>
-              </div>
+          {/* Tiket Diklaim Section */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl shadow-lg p-6 sm:p-8">
+            <div className="flex items-center space-x-3 mb-6">
+              <span className="text-gray-800 text-lg">🎫</span>
+              <h2 className="text-gray-800 text-xl sm:text-2xl font-bold">Tiket Diklaim</h2>
             </div>
 
-            {claimedTicketsError && <div className="text-red-600 text-sm mb-2">{claimedTicketsError}</div>}
-            
-            {claimedTicketsLoading ? (
-              <div className="grid md:grid-cols-2 gap-4">
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="card p-6 animate-pulse">
-                    <div className="flex items-start gap-4">
-                      <div className="w-20 h-20 bg-gray-200 rounded-lg"></div>
-                      <div className="flex-1 space-y-2">
-                        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                        <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                        <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+            {tickets.length === 0 ? (
+              <div className="text-center py-12">
+                <span className="text-red-500">⚠️</span>
+                <p className="text-gray-600 mt-2">Belum ada tiket yang diklaim</p>
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {tickets.map((ticket) => (
+                  <div key={ticket.id} className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300">
+                    <div className="flex items-start justify-between mb-4">
+                      <span className="text-gray-800 text-2xl">🎫</span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        ticket.status === 'active' ? 'bg-green-100 text-green-800' : 
+                        ticket.status === 'used' ? 'bg-gray-100 text-gray-800' : 
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {getStatusIcon(ticket.status)} {ticket.status?.toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 mb-4">
+                      <div className="flex items-start space-x-2">
+                        <span className="flex-shrink-0 text-base">📍</span>
+                        <span className="text-sm break-words text-gray-800">{ticket.eventName}</span>
                       </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-base">🎫</span>
+                        <span className="text-sm break-words text-gray-800">{ticket.name}</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-base">💰</span>
+                        <span className="text-sm text-gray-800">Rp {ticket.price?.toLocaleString('id-ID') || '0'}</span>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <span className="flex-shrink-0 text-base">📅</span>
+                        <span className="text-sm text-gray-800">{new Date(ticket.eventDate).toLocaleDateString('id-ID')}</span>
+                      </div>
+                      {ticket.status === 'active' && (
+                        <div className="flex items-center space-x-2">
+                          <span className="flex-shrink-0 text-base text-green-600">✓</span>
+                          <span className="text-sm text-green-600">Siap digunakan</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button
+                        onClick={() => openPreview(ticket)}
+                        className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded-lg transition-all text-sm font-medium"
+                      >
+                        👁️ Lihat Detail & QR
+                      </button>
+                      <button
+                        onClick={() => downloadTicketPNG(ticket)}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg transition-all text-sm font-medium"
+                      >
+                        📥 Download QR
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
-            ) : (
-              <div className="grid md:grid-cols-2 gap-4">
-                {getFilteredClaimedTickets().map((ticket) => (
-                  <div key={ticket.id} className="rounded-lg border border-gray-200 p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex items-start gap-4">
-                      {ticket.imageUrl ? (
-                        <img src={ticket.imageUrl} alt={ticket.ticketName} className="w-20 h-20 object-cover rounded-lg" />
-                      ) : (
-                        <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-[#0F4D39] to-[#0e3f30] flex items-center justify-center">
-                          <span className="text-white text-2xl">🎫</span>
-                        </div>
-                      )}
-                      <div className="flex-1">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="text-[#0F4D39] font-semibold text-lg">{ticket.ticketName}</div>
-                          <span className={`px-2 py-1 text-xs rounded-full border ${getStatusBadgeColor(ticket.status)}`}>
-                            {getStatusIcon(ticket.status)} {ticket.status}
-                          </span>
-                        </div>
-                        
-                        <div className="space-y-1 text-sm text-gray-600">
-                          <div className="flex items-center gap-1">
-                            <span>📍</span>
-                            <span>{ticket.location}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span>🎫</span>
-                            <span>{ticket.quantity} tiket</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span>💰</span>
-                            <span className="font-medium text-[#0F4D39]">{formatPrice(ticket.totalPrice)}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span>📅</span>
-                            <span>Berlaku hingga: {new Date(ticket.validDate).toLocaleDateString('id-ID')}</span>
-                          </div>
-                          {ticket.usedAt && (
-                            <div className="flex items-center gap-1">
-                              <span>✓</span>
-                              <span>Digunakan: {new Date(ticket.usedAt).toLocaleDateString('id-ID')}</span>
-                            </div>
-                          )}
-                        </div>
-                        
-                        <div className="mt-3 flex gap-2">
-                          <button 
-                            onClick={() => openClaimedTicketDetail(ticket)}
-                            className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-[#0F4D39] text-white hover:bg-[#0e3f30] transition"
-                          >
-                            Lihat Detail & QR
-                          </button>
-                          <button 
-                            onClick={() => {
-                              const link = document.createElement('a');
-                              link.download = `ticket-${ticket.voucherCode}.png`;
-                              link.href = ticket.qrCode;
-                              link.click();
-                            }}
-                            className="px-3 py-1.5 text-sm rounded-lg border border-[#0F4D39] text-[#0F4D39] hover:bg-[#f0f8f6] transition"
-                          >
-                            Download QR
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                
-                {getFilteredClaimedTickets().length === 0 && (
-                  <div className="col-span-2 rounded-lg border border-gray-200 p-6 text-center">
-                    <div className="text-gray-400 text-4xl mb-2">🎫</div>
-                    <div className="text-sm text-gray-600">
-                      {ticketFilter === "ALL" ? "Belum ada tiket yang diklaim." : `Tidak ada tiket dengan status ${ticketFilter}.`}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">Tiket yang sudah dibeli akan muncul di sini.</div>
-                  </div>
-                )}
+            )}
+
+            {tickets.length === 0 && (
+              <div className="text-center py-12">
+                <div className="text-gray-400 text-4xl mb-3">🎫</div>
+                <p className="text-gray-600">Belum ada tiket yang diklaim</p>
               </div>
             )}
           </div>
 
-          {/* Claimed Promo Vouchers Section */}
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-[#0F4D39]">Voucher Promo Diklaim</h2>
-              <div className="flex gap-2">
-                <select
-                  value={voucherFilter}
-                  onChange={(e) => setVoucherFilter(e.target.value)}
-                  className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#0F4D39] focus:border-transparent"
-                >
-                  <option value="ALL">Semua Status</option>
-                  <option value="ACTIVE">Aktif</option>
-                  <option value="USED">Terpakai</option>
-                  <option value="EXPIRED">Expired</option>
-                </select>
-              </div>
+          {/* Voucher Promo Diklaim Section */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl shadow-lg p-6 sm:p-8">
+            <div className="flex items-center space-x-3 mb-6">
+              <span className="text-gray-800 text-xl">🎟️</span>
+              <h2 className="text-gray-800 text-xl sm:text-2xl font-bold">Voucher Promo Diklaim</h2>
             </div>
 
-            {vouchersError && <div className="text-red-600 text-sm mb-2">{vouchersError}</div>}
-            
-            {vouchersLoading ? (
-              <div className="grid md:grid-cols-2 gap-4">
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="card p-6 animate-pulse">
-                    <div className="flex items-start gap-4">
-                      <div className="w-20 h-20 bg-gray-200 rounded-lg"></div>
-                      <div className="flex-1 space-y-2">
-                        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                        <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                        <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+            {userTickets.filter(ticket => ticket.type === 'voucher').length === 0 ? (
+              <div className="text-center py-12">
+                <span className="text-red-500 text-lg">⚠️</span>
+                <p className="text-gray-600 mt-2">Belum ada voucher promo yang diklaim</p>
+                <p className="text-gray-500 text-sm mt-1">Voucher promo akan muncul di sini setelah Anda mengklaimnya</p>
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {userTickets.filter(ticket => ticket.type === 'voucher').map((ticket) => (
+                  <div key={ticket.id} className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300">
+                    <div className="flex items-start justify-between mb-4">
+                      <span className="text-gray-800 text-2xl">🎟️</span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        ticket.status === 'active' ? 'bg-green-100 text-green-800' : 
+                        ticket.status === 'used' ? 'bg-gray-100 text-gray-800' : 
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {getStatusIcon(ticket.status)} {ticket.status?.toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 mb-4">
+                      <div className="flex items-start space-x-2">
+                        <span className="flex-shrink-0 text-base">📝</span>
+                        <span className="text-sm break-words font-semibold text-gray-800">{ticket.name}</span>
                       </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-base">🎫</span>
+                        <span className="text-sm break-words text-gray-800">{ticket.description || 'Voucher Promo'}</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-base">📅</span>
+                        <span className="text-sm text-gray-800">Berlaku: {ticket.validUntil ? new Date(ticket.validUntil).toLocaleDateString('id-ID') : 'Tidak terbatas'}</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-base">📅</span>
+                        <span className="text-sm text-gray-800">Diklaim: {new Date(ticket.claimedAt).toLocaleDateString('id-ID')}</span>
+                      </div>
+                      {ticket.status === 'active' && (
+                        <div className="flex items-center space-x-2">
+                          <span className="text-base text-green-600">✓</span>
+                          <span className="text-sm text-green-600">Siap digunakan</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button
+                        onClick={() => {
+                          setCurrentVoucher(ticket);
+                          setShowEVoucher(true);
+                        }}
+                        className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded-lg transition-all text-sm font-medium"
+                      >
+                        👁️ Lihat E-Voucher
+                      </button>
+                      <button
+                        onClick={() => downloadEvoucherPNG(ticket)}
+                        className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg transition-all text-sm font-medium"
+                      >
+                        📥 Download QR
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
-            ) : (
-              <div className="grid md:grid-cols-2 gap-4">
-                {getFilteredVouchers().map((voucher) => (
-                  <div key={voucher.id} className="rounded-lg border border-gray-200 p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex items-start gap-4">
-                      {voucher.imageUrl ? (
-                        <img src={voucher.imageUrl} alt={voucher.title} className="w-20 h-20 object-cover rounded-lg" />
-                      ) : (
-                        <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center">
-                          <span className="text-white text-2xl">🎟️</span>
-                        </div>
-                      )}
-                      <div className="flex-1">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="text-[#0F4D39] font-semibold text-lg">{voucher.title}</div>
-                          <span className={`px-2 py-1 text-xs rounded-full border ${getStatusBadgeColor(voucher.status)}`}>
-                            {getStatusIcon(voucher.status)} {voucher.status}
-                          </span>
-                        </div>
-                        
-                        <div className="space-y-1 text-sm text-gray-600">
-                          {voucher.description && (
-                            <div className="flex items-start gap-1">
-                              <span>📝</span>
-                              <span className="line-clamp-2">{voucher.description}</span>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-1">
-                            <span>🎫</span>
-                            <span>Kode: {voucher.voucherCode}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span>📅</span>
-                            <span>Berlaku hingga: {new Date(voucher.validUntil).toLocaleDateString('id-ID')}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span>📅</span>
-                            <span>Diklaim: {new Date(voucher.createdAt).toLocaleDateString('id-ID')}</span>
-                          </div>
-                          {voucher.usedAt && (
-                            <div className="flex items-center gap-1">
-                              <span>✓</span>
-                              <span>Digunakan: {new Date(voucher.usedAt).toLocaleDateString('id-ID')}</span>
-                            </div>
-                          )}
-                        </div>
-                        
-                        <div className="mt-3 flex gap-2">
-                          <button 
-                            onClick={() => {
-                              setCurrentVoucher(voucher);
-                              setShowEVoucher(true);
-                            }}
-                            className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition"
-                          >
-                            Lihat E-Voucher
-                          </button>
-                          <button 
-                            onClick={() => {
-                              const link = document.createElement('a');
-                              link.download = `voucher-${voucher.voucherCode}.png`;
-                              link.href = voucher.qrCode;
-                              link.click();
-                            }}
-                            className="px-3 py-1.5 text-sm rounded-lg border border-purple-600 text-purple-600 hover:bg-purple-50 transition"
-                          >
-                            Download QR
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                
-                {getFilteredVouchers().length === 0 && (
-                  <div className="col-span-2 rounded-lg border border-gray-200 p-6 text-center">
-                    <div className="text-gray-400 text-4xl mb-2">🎟️</div>
-                    <div className="text-sm text-gray-600">
-                      {voucherFilter === "ALL" ? "Belum ada voucher promo yang diklaim." : `Tidak ada voucher dengan status ${voucherFilter}.`}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">Voucher promo yang sudah didaftarkan akan muncul di sini.</div>
-                  </div>
-                )}
+            )}
+
+            {userTickets.filter(ticket => ticket.type === 'voucher').length === 0 && (
+              <div className="text-center py-12">
+                <div className="text-gray-400 text-4xl mb-3">🎟️</div>
+                <p className="text-gray-600">Belum ada voucher promo yang diklaim</p>
               </div>
             )}
           </div>
 
           {/* User Tickets Section */}
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-[#0F4D39] mb-4">Tiket Saya</h2>
-            {error && <div className="text-red-600 text-sm mb-2">{error}</div>}
-            
+          <div className="bg-gray-50 border border-gray-200 rounded-xl shadow-lg p-6 sm:p-8">
+            <div className="flex items-center space-x-3 mb-6">
+              <span className="text-gray-800 text-xl">🎫</span>
+              <h2 className="text-gray-800 text-xl sm:text-2xl font-bold">User Tickets</h2>
+            </div>
+
+            {error && (
+              <div className="text-center py-8">
+                <span className="text-red-500 text-lg">⚠️</span>
+                <p className="text-red-600 mt-2">{error}</p>
+              </div>
+            )}
+
             {loading ? (
-              <div className="grid md:grid-cols-2 gap-4">
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="card p-6 animate-pulse">
-                    <div className="flex items-start gap-4">
-                      <div className="w-20 h-20 bg-gray-200 rounded-lg"></div>
-                      <div className="flex-1 space-y-2">
-                        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                        <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                        <div className="h-3 bg-gray-200 rounded w-1/3"></div>
-                      </div>
-                    </div>
+              <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="bg-gray-100 rounded-lg p-4 sm:p-6 animate-pulse">
+                    <div className="h-4 bg-gray-300 rounded mb-2"></div>
+                    <div className="h-3 bg-gray-300 rounded mb-4"></div>
+                    <div className="h-8 bg-gray-300 rounded"></div>
                   </div>
                 ))}
               </div>
+            ) : userTickets.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-blue-400 text-4xl mb-3">🎫</div>
+                <p className="text-gray-600">Belum ada user tickets</p>
+              </div>
             ) : (
-              <div className="grid md:grid-cols-2 gap-4">
-                {tickets.map((ticket) => (
-                  <div key={ticket.id} className="rounded-lg border border-gray-200 p-4 bg-white shadow-sm">
-                    <div className="flex items-start gap-4">
-                      <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-[#0F4D39] to-[#0e3f30] flex items-center justify-center">
-                        <span className="text-white text-2xl">🎫</span>
+              <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {userTickets.map((ticket) => (
+                  <div key={ticket.id} className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg p-4 sm:p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
+                    <div className="flex items-start justify-between mb-4">
+                      <span className="text-white text-3xl sm:text-6xl">🎫</span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        ticket.status === 'active' ? 'bg-green-100 text-green-800' : 
+                        ticket.status === 'used' ? 'bg-gray-100 text-gray-800' : 
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {getStatusIcon(ticket.status)} {ticket.status?.toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 mb-4">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-base">📅</span>
+                        <span className="text-sm">Valid: {ticket.validUntil ? new Date(ticket.validUntil).toLocaleDateString('id-ID') : 'Tidak terbatas'}</span>
                       </div>
-                      <div className="flex-1">
-                        <div className="text-[#0F4D39] font-semibold text-lg">{ticket.name}</div>
-                        <div className="text-sm text-gray-600 mt-1">
-                          Berlaku hingga: {new Date(ticket.validUntil).toLocaleDateString('id-ID')}
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          Status: <span className="font-medium">{ticket.status || 'Active'}</span>
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Hash: <span className="font-mono text-xs">{ticket.hash}</span>
-                        </div>
-                        <div className="mt-3 flex gap-2">
-                          <button 
-                            onClick={() => openPreview(ticket)}
-                            className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-[#0F4D39] text-white hover:bg-[#0e3f30] transition"
-                          >
-                            Lihat QR Code
-                          </button>
-                          <button 
-                            onClick={() => {
-                              const link = document.createElement('a');
-                              link.download = `ticket-${ticket.hash}.png`;
-                              link.href = ticket.qrCode;
-                              link.click();
-                            }}
-                            className="px-3 py-1.5 text-sm rounded-lg border border-[#0F4D39] text-[#0F4D39] hover:bg-[#f0f8f6] transition"
-                          >
-                            Download
-                          </button>
-                        </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-base">📊</span>
+                        <span className="text-sm">Status: {ticket.status}</span>
                       </div>
+                      <div className="flex items-start space-x-2">
+                        <span className="flex-shrink-0 text-base">🔗</span>
+                        <span className="text-xs font-mono break-all">{ticket.hash}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button
+                        onClick={() => openPreview(ticket)}
+                        className="flex-1 bg-white/20 hover:bg-white/30 text-white px-3 py-2 rounded-lg transition-all text-sm font-medium"
+                      >
+                        👁️ Lihat QR Code
+                      </button>
+                      <button
+                        onClick={() => downloadTicketPNG(ticket)}
+                        className="flex-1 bg-white hover:bg-gray-100 text-blue-600 px-3 py-2 rounded-lg transition-all text-sm font-medium"
+                      >
+                        📥 Download Tiket
+                      </button>
                     </div>
                   </div>
                 ))}
-                
-                {tickets.length === 0 && (
-                  <div className="col-span-2 rounded-lg border border-gray-200 p-6 text-center">
-                    <div className="text-gray-400 text-4xl mb-2">🎫</div>
-                    <div className="text-sm text-gray-600">Belum ada tiket.</div>
-                    <div className="text-xs text-gray-500 mt-1">Tiket yang Anda beli akan muncul di sini.</div>
-                  </div>
-                )}
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Claimed Ticket Detail Modal */}
-      {selectedClaimedTicket && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-[#0F4D39]">Detail Tiket</h3>
-                <button 
-                  onClick={closeClaimedTicketDetail}
-                  className="text-gray-400 hover:text-gray-600 text-xl"
-                >
-                  ×
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                {/* Ticket Image */}
-                <div className="w-full h-48 rounded-lg overflow-hidden">
-                  {selectedClaimedTicket.imageUrl ? (
-                    <img 
-                      src={selectedClaimedTicket.imageUrl} 
-                      alt={selectedClaimedTicket.ticketName}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-[#0F4D39] to-[#0e3f30] flex items-center justify-center">
-                      <span className="text-white text-6xl">🎫</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Ticket Info */}
-                <div className="space-y-3">
-                  <div>
-                    <h4 className="font-semibold text-[#0F4D39] text-xl">{selectedClaimedTicket.ticketName}</h4>
-                    <p className="text-gray-600 text-sm mt-1">{selectedClaimedTicket.description}</p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-500">Kode Voucher:</span>
-                      <div className="font-mono font-semibold text-[#0F4D39]">{selectedClaimedTicket.voucherCode}</div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Status:</span>
-                      <div className={`inline-block px-2 py-1 text-xs rounded-full border ${getStatusBadgeColor(selectedClaimedTicket.status)}`}>
-                        {getStatusIcon(selectedClaimedTicket.status)} {selectedClaimedTicket.status}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Lokasi:</span>
-                      <div className="font-medium">{selectedClaimedTicket.location}</div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Jumlah:</span>
-                      <div className="font-medium">{selectedClaimedTicket.quantity} tiket</div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Total Harga:</span>
-                      <div className="font-semibold text-[#0F4D39]">{formatPrice(selectedClaimedTicket.totalPrice)}</div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Berlaku hingga:</span>
-                      <div className="font-medium">{new Date(selectedClaimedTicket.validDate).toLocaleDateString('id-ID')}</div>
-                    </div>
-                    {selectedClaimedTicket.bookingDate && (
-                      <div>
-                        <span className="text-gray-500">Tanggal Booking:</span>
-                        <div className="font-medium">{new Date(selectedClaimedTicket.bookingDate).toLocaleDateString('id-ID')}</div>
-                      </div>
-                    )}
-                    {selectedClaimedTicket.usedAt && (
-                      <div>
-                        <span className="text-gray-500">Digunakan:</span>
-                        <div className="font-medium">{new Date(selectedClaimedTicket.usedAt).toLocaleDateString('id-ID')}</div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* QR Code Section */}
-                  <div className="border-t pt-4">
-                    <div className="text-center">
-                      <h5 className="font-semibold text-[#0F4D39] mb-3">QR Code Tiket</h5>
-                      <div className="relative inline-block">
-                        <img 
-                          src={selectedClaimedTicket.qrCode} 
-                          alt="QR Code"
-                          className="w-48 h-48 mx-auto border border-gray-200 rounded-lg"
-                        />
-                        {selectedClaimedTicket.status === 'USED' && (
-                          <div className="absolute inset-0 bg-red-500 bg-opacity-20 flex items-center justify-center rounded-lg">
-                            <div className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-semibold transform rotate-12">
-                              TERPAKAI
-                            </div>
-                          </div>
-                        )}
-                        {selectedClaimedTicket.status === 'EXPIRED' && (
-                          <div className="absolute inset-0 bg-gray-500 bg-opacity-20 flex items-center justify-center rounded-lg">
-                            <div className="bg-gray-500 text-white px-3 py-1 rounded-full text-sm font-semibold transform rotate-12">
-                              EXPIRED
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-2">
-                        Tunjukkan QR code ini saat menggunakan tiket
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-2 pt-4">
-                    <button 
-                      onClick={() => {
-                        const link = document.createElement('a');
-                        link.download = `ticket-${selectedClaimedTicket.voucherCode}.png`;
-                        link.href = selectedClaimedTicket.qrCode;
-                        link.click();
-                      }}
-                      className="flex-1 px-4 py-2 bg-[#0F4D39] text-white rounded-lg hover:bg-[#0e3f30] transition text-sm font-medium"
-                    >
-                      Download QR Code
-                    </button>
-                    <button 
-                      onClick={() => {
-                        if (navigator.share) {
-                          navigator.share({
-                            title: selectedClaimedTicket.ticketName,
-                            text: `Tiket ${selectedClaimedTicket.ticketName} - Kode: ${selectedClaimedTicket.voucherCode}`,
-                            url: selectedClaimedTicket.qrCode
-                          });
-                        }
-                      }}
-                      className="flex-1 px-4 py-2 border border-[#0F4D39] text-[#0F4D39] rounded-lg hover:bg-[#f0f8f6] transition text-sm font-medium"
-                    >
-                      Bagikan
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Preview Modal */}
       {previewOpen && selectedTicket && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-[#0F4D39]">Ticket Preview</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-lg w-full max-w-md">
+            <div className="p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <h3 className="text-base sm:text-lg font-semibold text-[#0F4D39]">Ticket Preview</h3>
                 <button 
                   onClick={closePreview}
                   className="text-gray-400 hover:text-gray-600 text-xl"
@@ -935,11 +611,11 @@ export default function MyTicketPage() {
                 </button>
               </div>
               <div className="text-center">
-                <h4 className="font-semibold text-[#0F4D39]">{selectedTicket.name}</h4>
-                <p className="text-sm text-gray-600">Hash: {selectedTicket.hash}</p>
+                <h4 className="font-semibold text-[#0F4D39] break-words">{selectedTicket.name}</h4>
+                <p className="text-sm text-gray-600 break-all">Hash: {selectedTicket.hash}</p>
               </div>
               <div className="mt-4 text-center">
-                <img src={selectedTicket.qrCode} alt="QR Code" className="w-48 h-48 mx-auto" />
+                <img src={selectedTicket.qrCode} alt="QR Code" className="w-32 h-32 sm:w-48 sm:h-48 mx-auto" />
               </div>
             </div>
           </div>
@@ -948,11 +624,11 @@ export default function MyTicketPage() {
 
       {/* E-Voucher Modal */}
       {showEVoucher && currentVoucher && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-[#0F4D39]">E-Voucher</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <h3 className="text-base sm:text-lg font-semibold text-[#0F4D39]">E-Voucher</h3>
                 <button 
                   onClick={() => setShowEVoucher(false)}
                   className="text-gray-400 hover:text-gray-600 text-xl"
@@ -961,19 +637,19 @@ export default function MyTicketPage() {
                 </button>
               </div>
 
-              <div className="text-center space-y-4">
+              <div className="text-center space-y-3 sm:space-y-4">
                 <div>
-                  <h4 className="font-semibold text-[#0F4D39] text-lg">
+                  <h4 className="font-semibold text-[#0F4D39] text-base sm:text-lg break-words">
                     {currentVoucher.benefit?.title || 'E-Voucher'}
                   </h4>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="text-sm text-gray-600 mt-1 break-words">
                     {currentVoucher.benefit?.description || ''}
                   </p>
                 </div>
 
                 <div className="bg-gray-50 p-3 rounded-lg">
                   <div className="text-sm text-gray-600">Kode Voucher</div>
-                  <div className="font-mono font-semibold text-[#0F4D39] text-lg">
+                  <div className="font-mono font-semibold text-[#0F4D39] text-base sm:text-lg break-all">
                     {currentVoucher.voucherCode || 'N/A'}
                   </div>
                 </div>
@@ -994,11 +670,11 @@ export default function MyTicketPage() {
                     <img 
                       src={currentVoucher.qrCode} 
                       alt="QR Code" 
-                      className="w-48 h-48 mx-auto border border-gray-200 rounded-lg"
+                      className="w-32 h-32 sm:w-48 sm:h-48 mx-auto border border-gray-200 rounded-lg"
                     />
                     {currentVoucher.isUsed && (
                       <div className="absolute inset-0 bg-red-500 bg-opacity-20 flex items-center justify-center rounded-lg">
-                        <div className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-semibold transform rotate-12">
+                        <div className="bg-red-500 text-white px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-semibold transform rotate-12">
                           TERPAKAI
                         </div>
                       </div>
@@ -1006,16 +682,16 @@ export default function MyTicketPage() {
                   </div>
                 )}
 
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <button 
                     onClick={() => downloadEvoucherPNG(currentVoucher)}
-                    className="flex-1 px-4 py-2 bg-[#0F4D39] text-white rounded-lg hover:bg-[#0e3f30] transition text-sm"
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm"
                   >
                     Download QR
                   </button>
                   <button 
                     onClick={() => printEvoucher(currentVoucher)}
-                    className="flex-1 px-4 py-2 border border-[#0F4D39] text-[#0F4D39] rounded-lg hover:bg-[#f0f8f6] transition text-sm"
+                    className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition text-sm"
                   >
                     Print
                   </button>

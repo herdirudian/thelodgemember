@@ -15,6 +15,7 @@ import AdminEvents from '@/components/AdminEvents';
 import AdminSliderImages from '@/components/AdminSliderImages';
 import AdminVouchers from '@/components/AdminVouchers';
 import AdminRedeemVoucher from '@/components/AdminRedeemVoucher';
+import AdminMemberTickets from '@/components/AdminMemberTickets';
 import AdminAnalytics from '@/components/AdminAnalytics';
 import AdminTourismTickets from '@/components/AdminTourismTickets';
 import AdminAccommodation from '@/components/AdminAccommodation';
@@ -32,10 +33,10 @@ export default function AdminPage() {
 }
 
 function AdminRoot() {
-  const [menu, setMenu] = useState<'overview' | 'members' | 'points' | 'promos' | 'benefits' | 'slider' | 'vouchers' | 'redeem-voucher' | 'activities' | 'member-activities' | 'admins' | 'settings' | 'events' | 'analytics' | 'registration-codes' | 'tourism-tickets' | 'accommodation' | 'notifications'>('overview');
+  const [menu, setMenu] = useState<'overview' | 'members' | 'points' | 'promos' | 'benefits' | 'slider' | 'vouchers' | 'redeem-voucher' | 'member-tickets' | 'activities' | 'member-activities' | 'admins' | 'settings' | 'events' | 'analytics' | 'registration-codes' | 'tourism-tickets' | 'accommodation' | 'notifications'>('overview');
   
   useEffect(() => {
-    const allowed = new Set(['overview', 'members', 'points', 'promos', 'benefits', 'slider', 'vouchers', 'redeem-voucher', 'activities', 'member-activities', 'admins', 'settings', 'events', 'analytics', 'registration-codes', 'tourism-tickets', 'accommodation', 'notifications']);
+    const allowed = new Set(['overview', 'members', 'points', 'promos', 'benefits', 'slider', 'vouchers', 'redeem-voucher', 'member-tickets', 'activities', 'member-activities', 'admins', 'settings', 'events', 'analytics', 'registration-codes', 'tourism-tickets', 'accommodation', 'notifications']);
     const syncFromHash = () => {
       try {
         const h = (window.location.hash || '#overview').replace('#', '');
@@ -64,6 +65,7 @@ function AdminRoot() {
         {menu === 'slider' && <AdminSliderImages />}
         {menu === 'vouchers' && <AdminVouchers />}
         {menu === 'redeem-voucher' && <AdminRedeemVoucher />}
+        {menu === 'member-tickets' && <AdminMemberTickets />}
         {menu === 'registration-codes' && <AdminRegistrationCodes />}
         {menu === 'activities' && <AdminActivities />}
         {menu === 'member-activities' && <AdminMemberActivities />}

@@ -1626,4 +1626,144 @@ router.get('/bookings/tourism-tickets', authMiddleware, async (req: any, res) =>
   }
 });
 
+// GET /api/tickets - Get member's claimed tickets (for My Ticket page)
+router.get('/tickets', authMiddleware, async (req: any, res) => {
+  try {
+    const userId = req.user.uid as string;
+    const member = await prisma.member.findUnique({ 
+      where: { userId },
+      include: { user: true }
+    });
+    
+    if (!member) {
+      return res.status(404).json({ message: 'Member not found' });
+    }
+
+    // Get all tickets for this member
+    const tickets = await prisma.ticket.findMany({
+      where: { memberId: member.id },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Transform tickets to match frontend expectations
+    const transformedTickets = await Promise.all(tickets.map(async (ticket) => {
+      // Generate QR code for ticket
+      const { data, hash } = signPayloadWithFriendlyCode({
+        type: 'ticket',
+        ticketName: ticket.name,
+        memberId: ticket.memberId,
+        ticketId: ticket.id,
+      });
+      
+      const qrUrl = `${config.appUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${ticket.qrPayloadHash || hash}`;
+      const qrCode = await generateQRDataURL(qrUrl);
+
+      return {
+        id: ticket.id,
+        name: ticket.name,
+        eventName: ticket.name, // Use ticket name as event name
+        eventDate: ticket.validDate,
+        price: 0, // Free tickets
+        status: ticket.status.toLowerCase(),
+        qrCode: qrCode,
+        validUntil: ticket.validDate,
+        claimedAt: ticket.createdAt
+      };
+    }));
+
+    res.json(transformedTickets);
+  } catch (error: any) {
+    console.error('Get tickets error:', error);
+    res.status(500).json({ message: error?.message || 'Failed to fetch tickets' });
+  }
+});
+
+// GET /api/user-tickets - Get member's vouchers and other tickets (for My Ticket page)
+router.get('/user-tickets', authMiddleware, async (req: any, res) => {
+  try {
+    const userId = req.user.uid as string;
+    const member = await prisma.member.findUnique({ 
+      where: { userId },
+      include: { user: true }
+    });
+    
+    if (!member) {
+      return res.status(404).json({ message: 'Member not found' });
+    }
+
+    const userTickets = [];
+
+    // Get point redemptions (vouchers)
+    const pointRedemptions = await prisma.pointTransaction.findMany({
+      where: { 
+        userId: userId,
+        type: 'SPENT'
+      },
+      include: {
+        benefit: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Transform point redemptions to voucher format
+    for (const redemption of pointRedemptions) {
+      if (redemption.benefit) {
+        // Generate QR code for voucher
+        const { data, hash } = signPayloadWithFriendlyCode({
+          type: 'voucher',
+          voucherName: redemption.benefit.title,
+          memberId: member.id,
+          redemptionId: redemption.id,
+        });
+        
+        const qrUrl = `${config.appUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}`;
+        const qrCode = await generateQRDataURL(qrUrl);
+
+        userTickets.push({
+          id: redemption.id,
+          type: 'voucher',
+          name: redemption.benefit.title,
+          description: redemption.benefit.description || 'Voucher Promo',
+          status: 'active', // Assume active for now
+          validUntil: redemption.benefit.validUntil,
+          claimedAt: redemption.createdAt,
+          qrCode: qrCode
+        });
+      }
+    }
+
+    // Get tourism ticket bookings
+    const tourismBookings = await prisma.tourismTicketBooking.findMany({
+      where: {
+        memberId: member.id,
+        status: 'PAID'
+      },
+      include: {
+        ticket: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Transform tourism bookings to ticket format
+    for (const booking of tourismBookings) {
+      userTickets.push({
+        id: booking.id,
+        type: 'ticket',
+        name: booking.ticket.name,
+        description: booking.ticket.description,
+        status: booking.validUntil && new Date(booking.validUntil) < new Date() ? 'expired' : 
+                booking.usedAt ? 'used' : 'active',
+        validUntil: booking.validUntil,
+        claimedAt: booking.createdAt,
+        qrCode: booking.qrCode || ''
+      });
+    }
+
+    res.json(userTickets);
+  } catch (error: any) {
+    console.error('Get user tickets error:', error);
+    res.status(500).json({ message: error?.message || 'Failed to fetch user tickets' });
+  }
+});
+
 export default router;

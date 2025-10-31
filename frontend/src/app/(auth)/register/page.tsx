@@ -163,7 +163,7 @@ export default function RegisterPage() {
            <div className="mb-8">
              <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm p-4">
                <img 
-                 src="/LOGO TLG WHITE (1).svg" 
+                 src="/logo-tlg-white.svg" 
                  alt="The Lodge Family Logo" 
                  className="w-full h-full object-contain"
                />

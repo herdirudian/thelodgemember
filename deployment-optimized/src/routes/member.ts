@@ -1331,4 +1331,115 @@ router.get('/benefits/my-redemptions', authMiddleware, async (req: any, res) => 
   }
 });
 
+// Get member's promo vouchers
+router.get('/promos/my-vouchers', authMiddleware, async (req: any, res) => {
+  try {
+    const userId = req.user.uid as string;
+
+    // Get member info
+    const member = await prisma.member.findUnique({ 
+      where: { userId }
+    });
+    if (!member) return res.status(404).json({ message: 'Member not found' });
+
+    // Get member's promo registrations
+    const promoRegistrations = await prisma.promoRegistration.findMany({
+      where: { memberId: member.id },
+      include: {
+        promo: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            imageUrl: true,
+            startDate: true,
+            endDate: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Transform data to match frontend expectations
+    const vouchers = promoRegistrations.map(registration => ({
+      id: registration.id,
+      title: registration.promo.title,
+      description: registration.promo.description,
+      imageUrl: registration.promo.imageUrl,
+      voucherCode: registration.voucherCode,
+      qrCode: registration.qrCode,
+      status: registration.status,
+      isUsed: registration.isUsed,
+      usedAt: registration.usedAt,
+      createdAt: registration.createdAt,
+      validUntil: registration.promo.endDate,
+      promo: registration.promo
+    }));
+
+    res.json({ vouchers });
+  } catch (e) { 
+    console.error(e); 
+    res.status(500).json({ message: 'Server error' }); 
+  }
+});
+
+// Get member's tourism ticket bookings
+router.get('/bookings/tourism-tickets', authMiddleware, async (req: any, res) => {
+  try {
+    const memberId = req.user.id;
+
+    const bookings = await prisma.tourismTicketBooking.findMany({
+      where: {
+        memberId: memberId,
+        status: 'PAID' // Only show paid/confirmed bookings
+      },
+      include: {
+        ticket: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            location: true,
+            imageUrl: true,
+            price: true,
+            finalPrice: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Transform data to match frontend expectations
+    const tickets = bookings.map(booking => ({
+      id: booking.id,
+      ticketName: booking.ticket.name,
+      description: booking.ticket.description,
+      location: booking.ticket.location,
+      quantity: booking.quantity,
+      totalPrice: booking.totalAmount,
+      status: booking.validUntil && new Date(booking.validUntil) < new Date() ? 'EXPIRED' : 
+              booking.usedAt ? 'USED' : 'ACTIVE',
+      voucherCode: booking.voucherCode,
+      validDate: booking.validUntil,
+      bookingDate: booking.createdAt,
+      usedAt: booking.usedAt,
+      qrCode: booking.qrCode,
+      imageUrl: booking.ticket.imageUrl,
+      includes: [], // Can be populated from ticket details if needed
+      terms: [] // Can be populated from ticket details if needed
+    }));
+
+    res.json({
+      success: true,
+      tickets
+    });
+  } catch (error: any) {
+    console.error('Get tourism ticket bookings error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: error?.message || 'Failed to fetch tourism ticket bookings' 
+    });
+  }
+});
+
 export default router;

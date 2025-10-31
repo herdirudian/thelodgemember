@@ -247,50 +247,50 @@ export default function EditProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Memuat data profil...</p>
+          <p className="text-gray-600">Memuat data profil...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-6">
+    <div className="min-h-screen bg-gray-50 py-6">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-6">
           <Link 
             href="/profile" 
-            className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mb-4"
+            className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-4"
           >
             <IconArrowLeft className="w-5 h-5 mr-2" />
             Kembali ke Profil
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Edit Profil</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">Perbarui informasi profil Anda</p>
+          <h1 className="text-3xl font-bold text-gray-900">Edit Profil</h1>
+          <p className="text-gray-600 mt-2">Perbarui informasi profil Anda</p>
         </div>
 
         {/* Alert Messages */}
         {error && (
-          <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-            <p className="text-red-700 dark:text-red-400">{error}</p>
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-700">{error}</p>
           </div>
         )}
 
         {success && (
-          <div className="mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-            <p className="text-green-700 dark:text-green-400">{success}</p>
+          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+            <p className="text-green-700">{success}</p>
           </div>
         )}
 
         {/* Form */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+        <div className="bg-white rounded-xl shadow-md p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email (Read Only) */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 <IconMail className="w-4 h-4 inline mr-2" />
                 Email
               </label>
@@ -298,14 +298,14 @@ export default function EditProfilePage() {
                 type="email"
                 value={formData.email}
                 disabled
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Email tidak dapat diubah</p>
+              <p className="text-xs text-gray-500 mt-1">Email tidak dapat diubah</p>
             </div>
 
             {/* Full Name */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 <IconUser className="w-4 h-4 inline mr-2" />
                 Nama Lengkap *
               </label>
@@ -315,14 +315,14 @@ export default function EditProfilePage() {
                 value={formData.fullName}
                 onChange={handleInputChange}
                 required
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
                 placeholder="Masukkan nama lengkap"
               />
             </div>
 
             {/* Phone */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 <IconPhone className="w-4 h-4 inline mr-2" />
                 Nomor Telepon *
               </label>
@@ -334,7 +334,7 @@ export default function EditProfilePage() {
                     value={formData.phone}
                     onChange={handleInputChange}
                     required
-                    className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
                     placeholder="Masukkan nomor telepon"
                   />
                   {!phoneVerification.isVerified && formData.phone && (
@@ -348,17 +348,17 @@ export default function EditProfilePage() {
                     </button>
                   )}
                   {phoneVerification.isVerified && (
-                    <div className="flex items-center px-4 py-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                      <IconCheck className="w-5 h-5 text-green-600 dark:text-green-400" />
-                      <span className="ml-2 text-sm text-green-700 dark:text-green-400">Terverifikasi</span>
+                    <div className="flex items-center px-4 py-3 bg-green-50 border border-green-200 rounded-lg">
+                      <IconCheck className="w-5 h-5 text-green-600" />
+                      <span className="ml-2 text-sm text-green-700">Terverifikasi</span>
                     </div>
                   )}
                 </div>
 
                 {/* Verification Code Input */}
                 {phoneVerification.isSent && !phoneVerification.isVerified && (
-                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                    <p className="text-sm text-blue-700 dark:text-blue-400 mb-3">
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-700 mb-3">
                       Kode verifikasi telah dikirim ke WhatsApp Anda. Masukkan kode 6 digit:
                     </p>
                     <div className="flex gap-2">
@@ -368,7 +368,7 @@ export default function EditProfilePage() {
                         onChange={(e) => setPhoneVerification(prev => ({ ...prev, code: e.target.value }))}
                         placeholder="Masukkan kode verifikasi"
                         maxLength={6}
-                        className="flex-1 px-3 py-2 border border-blue-300 dark:border-blue-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-center text-lg font-mono"
+                        className="flex-1 px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 text-center text-lg font-mono"
                       />
                       <button
                         type="button"
@@ -383,7 +383,7 @@ export default function EditProfilePage() {
                       type="button"
                       onClick={sendWhatsAppVerification}
                       disabled={phoneVerification.isSending}
-                      className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline"
+                      className="mt-2 text-sm text-blue-600 hover:text-blue-700 underline"
                     >
                       Kirim ulang kode
                     </button>
@@ -392,12 +392,12 @@ export default function EditProfilePage() {
 
                 {/* Phone verification status messages */}
                 {phoneVerification.isRequired && !phoneVerification.isSent && (
-                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                  <p className="text-sm text-amber-600">
                     ⚠️ Nomor telepon berubah. Verifikasi WhatsApp diperlukan sebelum menyimpan.
                   </p>
                 )}
                 {!phoneVerification.isVerified && !phoneVerification.isRequired && formData.phone && !phoneVerification.isSent && (
-                  <p className="text-sm text-blue-600 dark:text-blue-400">
+                  <p className="text-sm text-blue-600">
                     📱 Verifikasi nomor WhatsApp Anda untuk keamanan akun yang lebih baik.
                   </p>
                 )}
@@ -406,7 +406,7 @@ export default function EditProfilePage() {
 
             {/* Date of Birth */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 <IconCalendar className="w-4 h-4 inline mr-2" />
                 Tanggal Lahir
               </label>
@@ -415,13 +415,13 @@ export default function EditProfilePage() {
                 name="dateOfBirth"
                 value={formData.dateOfBirth}
                 onChange={handleInputChange}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
               />
             </div>
 
             {/* Address */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 <IconMapPin className="w-4 h-4 inline mr-2" />
                 Alamat
               </label>
@@ -430,7 +430,7 @@ export default function EditProfilePage() {
                 value={formData.address}
                 onChange={handleInputChange}
                 rows={3}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
                 placeholder="Masukkan alamat lengkap"
               />
             </div>
@@ -446,7 +446,7 @@ export default function EditProfilePage() {
               </button>
               <Link
                 href="/profile"
-                className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-6 py-3 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-center"
+                className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-300 transition-colors text-center"
               >
                 Batal
               </Link>

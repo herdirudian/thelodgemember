@@ -16,7 +16,9 @@ import {
   IconKey,
   IconTrash,
   IconCheck,
-  IconX
+  IconX,
+  IconPhone,
+  IconShieldCheck
 } from '@tabler/icons-react';
 
 interface UserSettings {
@@ -40,6 +42,12 @@ export default function SettingsPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [verificationType, setVerificationType] = useState<'whatsapp' | 'email' | null>(null);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [countdown, setCountdown] = useState(0);
   
   const [settings, setSettings] = useState<UserSettings>({
     notifications: {
@@ -61,6 +69,15 @@ export default function SettingsPage() {
     fetchUserData();
     loadSettings();
   }, []);
+
+  // Countdown timer for resend verification
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (countdown > 0) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [countdown]);
 
   const fetchUserData = async () => {
     try {
@@ -133,25 +150,99 @@ export default function SettingsPage() {
     router.push('/login');
   };
 
-  const handleDeleteAccount = async () => {
+  const handleDeleteAccountRequest = () => {
+    setShowDeleteConfirm(false);
+    setShowVerificationModal(true);
+    setVerificationType(null);
+    setVerificationCode('');
+    setVerificationSent(false);
+  };
+
+  const sendVerificationCode = async (type: 'whatsapp' | 'email') => {
+    setIsVerifying(true);
+    setError('');
+
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      // In real app, would call delete API
-      // const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/delete-account`, {
-      //   method: 'DELETE',
-      //   headers: { 'Authorization': `Bearer ${token}` }
-      // });
+      // Simulate API call to send verification code
+      const response = await fetch(`/api/auth/send-delete-verification`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ type })
+      });
 
-      // Simulate deletion
-      localStorage.removeItem('token');
-      localStorage.removeItem('userSettings');
-      alert('Akun berhasil dihapus');
-      router.push('/');
+      if (response.ok) {
+        setVerificationType(type);
+        setVerificationSent(true);
+        setCountdown(60); // 60 seconds countdown
+        setSuccess(`Kode verifikasi telah dikirim ke ${type === 'whatsapp' ? 'WhatsApp' : 'email'} Anda`);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.message || 'Gagal mengirim kode verifikasi');
+      }
     } catch (err) {
-      setError('Gagal menghapus akun');
+      setError('Gagal mengirim kode verifikasi');
+    } finally {
+      setIsVerifying(false);
     }
+  };
+
+  const verifyAndDeleteAccount = async () => {
+    if (!verificationCode.trim()) {
+      setError('Masukkan kode verifikasi');
+      return;
+    }
+
+    setIsVerifying(true);
+    setError('');
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      // Simulate API call to verify and delete account
+      const response = await fetch(`/api/auth/delete-account`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          verificationCode,
+          verificationType 
+        })
+      });
+
+      if (response.ok) {
+        // Account deleted successfully
+        localStorage.removeItem('token');
+        localStorage.removeItem('userSettings');
+        alert('Akun berhasil dihapus. Terima kasih telah menggunakan layanan kami.');
+        router.push('/');
+      } else {
+        const errorData = await response.json();
+        setError(errorData.message || 'Kode verifikasi tidak valid');
+      }
+    } catch (err) {
+      setError('Gagal memverifikasi kode');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const resetVerificationModal = () => {
+    setShowVerificationModal(false);
+    setVerificationType(null);
+    setVerificationCode('');
+    setVerificationSent(false);
+    setCountdown(0);
+    setError('');
+    setSuccess('');
   };
 
   const updateNotificationSetting = (key: keyof UserSettings['notifications'], value: boolean) => {
@@ -427,28 +518,139 @@ export default function SettingsPage() {
         {showDeleteConfirm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                 Hapus Akun
-               </h3>
-               <p className="text-gray-600 mb-6">
-                 Apakah Anda yakin ingin menghapus akun? Tindakan ini tidak dapat dibatalkan.
-               </p>
-               <div className="flex gap-3">
-                 <button
-                   onClick={() => setShowDeleteConfirm(false)}
-                   className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-300 transition-colors flex items-center justify-center gap-2"
-                 >
-                   <IconX className="w-4 h-4" />
-                   Batal
-                 </button>
-                 <button
-                   onClick={handleDeleteAccount}
-                   className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-                 >
-                   <IconTrash className="w-4 h-4" />
-                   Hapus
-                 </button>
-               </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <IconTrash className="w-5 h-5 text-red-600" />
+                Hapus Akun
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Untuk keamanan, kami perlu memverifikasi identitas Anda sebelum menghapus akun. 
+                Tindakan ini tidak dapat dibatalkan dan semua data Anda akan dihapus permanen.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+                >
+                  <IconX className="w-4 h-4" />
+                  Batal
+                </button>
+                <button
+                  onClick={handleDeleteAccountRequest}
+                  className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <IconShieldCheck className="w-4 h-4" />
+                  Lanjutkan
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Verification Modal */}
+        {showVerificationModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <IconShieldCheck className="w-5 h-5 text-blue-600" />
+                Verifikasi Identitas
+              </h3>
+              
+              {!verificationSent ? (
+                <>
+                  <p className="text-gray-600 mb-6">
+                    Pilih metode verifikasi untuk menghapus akun Anda:
+                  </p>
+                  
+                  <div className="space-y-3 mb-6">
+                    <button
+                      onClick={() => sendVerificationCode('whatsapp')}
+                      disabled={isVerifying}
+                      className="w-full flex items-center gap-3 p-4 border-2 border-green-200 rounded-lg hover:border-green-400 hover:bg-green-50 transition-colors disabled:opacity-50"
+                    >
+                      <IconPhone className="w-5 h-5 text-green-600" />
+                      <div className="text-left">
+                        <p className="font-medium text-gray-900">WhatsApp</p>
+                        <p className="text-sm text-gray-600">
+                          Kirim kode ke {userData?.phone || 'nomor terdaftar'}
+                        </p>
+                      </div>
+                    </button>
+                    
+                    <button
+                      onClick={() => sendVerificationCode('email')}
+                      disabled={isVerifying}
+                      className="w-full flex items-center gap-3 p-4 border-2 border-blue-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                    >
+                      <IconMail className="w-5 h-5 text-blue-600" />
+                      <div className="text-left">
+                        <p className="font-medium text-gray-900">Email</p>
+                        <p className="text-sm text-gray-600">
+                          Kirim kode ke {userData?.email || 'email terdaftar'}
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-gray-600 mb-4">
+                    Kode verifikasi telah dikirim ke {verificationType === 'whatsapp' ? 'WhatsApp' : 'email'} Anda.
+                    Masukkan kode untuk melanjutkan penghapusan akun.
+                  </p>
+                  
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Kode Verifikasi
+                    </label>
+                    <input
+                      type="text"
+                      value={verificationCode}
+                      onChange={(e) => setVerificationCode(e.target.value)}
+                      placeholder="Masukkan 6 digit kode"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      maxLength={6}
+                    />
+                  </div>
+                  
+                  <div className="flex items-center justify-between mb-6">
+                    <button
+                      onClick={() => sendVerificationCode(verificationType!)}
+                      disabled={countdown > 0 || isVerifying}
+                      className="text-sm text-blue-600 hover:text-blue-700 disabled:text-gray-400"
+                    >
+                      {countdown > 0 ? `Kirim ulang dalam ${countdown}s` : 'Kirim ulang kode'}
+                    </button>
+                  </div>
+                  
+                  <div className="flex gap-3 mb-4">
+                    <button
+                      onClick={verifyAndDeleteAccount}
+                      disabled={isVerifying || !verificationCode.trim()}
+                      className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {isVerifying ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          Memverifikasi...
+                        </>
+                      ) : (
+                        <>
+                          <IconTrash className="w-4 h-4" />
+                          Hapus Akun
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
+              
+              <button
+                onClick={resetVerificationModal}
+                className="w-full bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+              >
+                <IconX className="w-4 h-4" />
+                Batal
+              </button>
             </div>
           </div>
         )}

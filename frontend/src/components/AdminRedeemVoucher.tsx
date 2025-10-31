@@ -59,6 +59,19 @@ export default function AdminRedeemVoucher() {
   const [printData, setPrintData] = useState<any>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
+  // QR Scanner states
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [qrScannerLoading, setQRScannerLoading] = useState(false);
+  const [scannedMember, setScannedMember] = useState<any>(null);
+  const [memberTickets, setMemberTickets] = useState<ClaimedVoucher[]>([]);
+  const [showMemberTicketsModal, setShowMemberTicketsModal] = useState(false);
+  const [selectedMemberTickets, setSelectedMemberTickets] = useState<string[]>([]);
+
+  // Member Search states
+  const [memberSearchQuery, setMemberSearchQuery] = useState("");
+  const [memberSearchLoading, setMemberSearchLoading] = useState(false);
+  const [foundMember, setFoundMember] = useState<any>(null);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -234,6 +247,166 @@ export default function AdminRedeemVoucher() {
     setRedeemLoading(false);
   };
 
+  const handleRedeemSelectedTickets = async () => {
+    if (selectedMemberTickets.length === 0) return;
+    
+    setRedeemLoading(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const redeemPromises = selectedMemberTickets.map(async (ticketId) => {
+        const ticket = memberTickets.find(t => t.id === ticketId);
+        if (!ticket) return null;
+        
+        const response = await fetch('/api/admin/redeem', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            type: ticket.type,
+            id: ticket.id,
+          }),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(`Failed to redeem ${ticket.itemName}: ${errorData.message}`);
+        }
+        
+        return await response.json();
+      });
+      
+      await Promise.all(redeemPromises);
+      
+      setSuccess(`Berhasil redeem ${selectedMemberTickets.length} tiket!`);
+      setShowMemberTicketsModal(false);
+      setScannedMember(null);
+      setMemberTickets([]);
+      setSelectedMemberTickets([]);
+      loadData(); // Refresh main data
+    } catch (e: any) {
+      setError(e?.message || "Failed to redeem selected tickets");
+    }
+    
+    setRedeemLoading(false);
+  };
+
+  const toggleTicketSelection = (ticketId: string) => {
+    setSelectedMemberTickets(prev => 
+      prev.includes(ticketId) 
+        ? prev.filter(id => id !== ticketId)
+        : [...prev, ticketId]
+    );
+  };
+
+  const handleMemberSearch = async () => {
+    if (!memberSearchQuery.trim()) {
+      setError("Silakan masukkan Member ID, nomor HP, atau email");
+      return;
+    }
+
+    setMemberSearchLoading(true);
+    setError("");
+    setFoundMember(null);
+    setMemberTickets([]);
+
+    try {
+      const token = localStorage.getItem("token");
+      
+      const response = await fetch(`/api/admin/search-member?query=${encodeURIComponent(memberSearchQuery.trim())}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Member tidak ditemukan");
+      }
+
+      const member = await response.json();
+      setFoundMember(member);
+      setScannedMember(member); // Set scannedMember directly for modal
+      
+      // Load member tickets
+      await loadMemberTicketsByMemberId(member.id);
+      setShowMemberTicketsModal(true);
+      
+    } catch (e: any) {
+      setError(e?.message || "Gagal mencari member");
+    }
+    
+    setMemberSearchLoading(false);
+  };
+
+  const loadMemberTicketsByMemberId = async (memberId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      
+      const [ticketsRes, pointsRes, eventsRes] = await Promise.all([
+        fetch(`/api/admin/tickets?memberId=${memberId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`/api/admin/point-redemptions?memberId=${memberId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`/api/admin/event-registrations?memberId=${memberId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+
+      const [tickets, points, events] = await Promise.all([
+        ticketsRes.json(),
+        pointsRes.json(),
+        eventsRes.json(),
+      ]);
+
+      const allTickets: ClaimedVoucher[] = [
+        ...tickets.map((ticket: any) => ({
+          id: ticket.id,
+          type: 'ticket' as const,
+          itemId: ticket.id,
+          itemName: ticket.name,
+          memberId: ticket.memberId,
+          memberName: ticket.member?.fullName || 'Unknown',
+          claimedAt: ticket.claimedAt,
+          status: ticket.status,
+          details: ticket,
+        })),
+        ...points.map((point: any) => ({
+          id: point.id,
+          type: 'points' as const,
+          itemId: point.id,
+          itemName: point.benefit?.name || 'Point Redemption',
+          memberId: point.memberId,
+          memberName: point.member?.fullName || 'Unknown',
+          claimedAt: point.redeemedAt,
+          status: point.status,
+          details: point,
+        })),
+        ...events.map((event: any) => ({
+          id: event.id,
+          type: 'event' as const,
+          itemId: event.id,
+          itemName: event.event?.title || 'Event Registration',
+          memberId: event.memberId,
+          memberName: event.member?.fullName || 'Unknown',
+          claimedAt: event.registeredAt,
+          status: event.status === 'REGISTERED' ? 'PENDING' : event.status,
+          details: event,
+        })),
+      ];
+
+      setMemberTickets(allTickets);
+    } catch (e: any) {
+      setError(e?.message || "Failed to load member tickets");
+    }
+  };
+
   const handleRedeemByCode = async () => {
     if (!voucherCode.trim()) {
       setError("Silakan masukkan kode voucher");
@@ -338,6 +511,96 @@ export default function AdminRedeemVoucher() {
     window.print();
   };
 
+  // Handle QR Scanner
+  const handleQRScan = async (qrData: string) => {
+    setQRScannerLoading(true);
+    setError("");
+    
+    try {
+      // Parse QR data
+      const memberQRData = JSON.parse(qrData);
+      
+      if (memberQRData.type !== 'MEMBER_QR') {
+        throw new Error('QR Code bukan QR Code member yang valid');
+      }
+
+      // Load member tickets
+      await loadMemberTickets(memberQRData.memberId);
+      setScannedMember(memberQRData);
+      setShowQRScanner(false);
+      setShowMemberTicketsModal(true);
+      
+    } catch (e: any) {
+      setError(e?.message || "QR Code tidak valid atau gagal memuat data member");
+    }
+    
+    setQRScannerLoading(false);
+  };
+
+  const loadMemberTickets = async (memberId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      
+      // Load all vouchers for specific member
+      const [ticketsResponse, pointsResponse, eventsResponse] = await Promise.all([
+        fetch(`/api/admin/tickets?memberId=${memberId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`/api/admin/point-redemptions?memberId=${memberId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`/api/admin/event-registrations?memberId=${memberId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      ]);
+
+      const tickets = ticketsResponse.ok ? await ticketsResponse.json() : [];
+      const points = pointsResponse.ok ? await pointsResponse.json() : [];
+      const events = eventsResponse.ok ? await eventsResponse.json() : [];
+
+      // Combine and format data
+      const combined: ClaimedVoucher[] = [
+        ...tickets.map((t: any) => ({
+          id: t.id,
+          memberId: t.memberId,
+          memberName: t.memberName || 'Unknown',
+          type: 'ticket' as const,
+          itemId: t.id,
+          itemName: t.name,
+          status: t.status === 'ACTIVE' ? 'PENDING' : 'REDEEMED',
+          claimedAt: t.createdAt,
+          details: t
+        })),
+        ...points.map((p: any) => ({
+          id: p.id,
+          memberId: p.memberId,
+          memberName: p.memberName || 'Unknown',
+          type: 'points' as const,
+          itemId: p.id,
+          itemName: p.rewardName,
+          status: p.status === 'PENDING' ? 'PENDING' : 'REDEEMED',
+          claimedAt: p.createdAt,
+          details: p
+        })),
+        ...events.map((e: any) => ({
+          id: e.id,
+          memberId: e.memberId,
+          memberName: e.memberName || 'Unknown',
+          type: 'event' as const,
+          itemId: e.id,
+          itemName: e.eventName || 'Event Registration',
+          status: e.status === 'REGISTERED' ? 'PENDING' : 'REDEEMED',
+          claimedAt: e.createdAt,
+          details: e
+        }))
+      ];
+
+      setMemberTickets(combined);
+    } catch (e: any) {
+      throw new Error(e?.message || "Failed to load member tickets");
+    }
+  };
+
   // Filter claimed vouchers
   const filteredClaimedVouchers = claimedVouchers.filter(voucher => {
     if (filterType !== "ALL" && voucher.type.toUpperCase() !== filterType) return false;
@@ -433,6 +696,66 @@ export default function AdminRedeemVoucher() {
         </div>
         <p className="text-sm text-gray-500 mt-2">
           Masukkan kode voucher yang diberikan kepada member untuk melakukan redeem langsung.
+        </p>
+      </div>
+
+      {/* QR Scanner Section */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Scan QR Code Member</h2>
+        <div className="flex gap-4 items-center">
+          <div className="flex-1">
+            <p className="text-sm text-gray-600 mb-3">
+              Scan QR Code member dari halaman overview untuk melihat semua tiket yang bisa di-redeem.
+            </p>
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
+              <span>QR Code member tersedia di halaman Member Overview</span>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowQRScanner(true)}
+            disabled={qrScannerLoading}
+            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <span>📱</span>
+            {qrScannerLoading ? "Memproses..." : "Scan QR"}
+          </button>
+        </div>
+      </div>
+
+      {/* Member Search Section */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Cari Member</h2>
+        <div className="flex gap-4 items-end">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Member ID, Nomor HP, atau Email
+            </label>
+            <input
+              type="text"
+              value={memberSearchQuery}
+              onChange={(e) => setMemberSearchQuery(e.target.value)}
+              placeholder="Masukkan Member ID, nomor HP, atau email member"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0F4D39] focus:border-transparent"
+              disabled={memberSearchLoading}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleMemberSearch();
+                }
+              }}
+            />
+          </div>
+          <button
+            onClick={handleMemberSearch}
+            disabled={memberSearchLoading || !memberSearchQuery.trim()}
+            className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <span>🔍</span>
+            {memberSearchLoading ? "Mencari..." : "Cari Member"}
+          </button>
+        </div>
+        <p className="text-sm text-gray-500 mt-2">
+          Cari member berdasarkan ID, nomor HP, atau email untuk melihat dan redeem tiket mereka.
         </p>
       </div>
 
@@ -792,6 +1115,182 @@ export default function AdminRedeemVoucher() {
          <div className="fixed -top-[9999px] left-0 opacity-0 pointer-events-none">
            <div ref={printRef}>
              <PrintableReceipt data={printData} />
+           </div>
+         </div>
+       )}
+
+       {/* QR Scanner Modal */}
+       {showQRScanner && (
+         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+             <div className="flex justify-between items-center mb-4">
+               <h3 className="text-lg font-semibold">Scan QR Code Member</h3>
+               <button
+                 onClick={() => setShowQRScanner(false)}
+                 className="text-gray-400 hover:text-gray-600"
+               >
+                 ✕
+               </button>
+             </div>
+             
+             <div className="mb-4">
+               <p className="text-sm text-gray-600 mb-3">
+                 Arahkan kamera ke QR Code member atau masukkan data QR secara manual:
+               </p>
+               <textarea
+                 placeholder="Paste QR Code data di sini..."
+                 className="w-full px-3 py-2 border border-gray-300 rounded-md h-24 text-sm"
+                 onChange={(e) => {
+                   if (e.target.value.trim()) {
+                     handleQRScan(e.target.value.trim());
+                   }
+                 }}
+               />
+             </div>
+             
+             <div className="flex justify-end space-x-3">
+               <button
+                 onClick={() => setShowQRScanner(false)}
+                 className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+               >
+                 Batal
+               </button>
+             </div>
+           </div>
+         </div>
+       )}
+
+       {/* Member Tickets Modal */}
+       {showMemberTicketsModal && scannedMember && (
+         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+           <div className="bg-white rounded-lg p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+             <div className="flex justify-between items-center mb-4">
+               <div>
+                 <h3 className="text-lg font-semibold">Tiket Member: {scannedMember.fullName}</h3>
+                 <p className="text-sm text-gray-600">
+                   Member ID: {scannedMember.membershipNumber} | Level: {scannedMember.level}
+                   {scannedMember.isLifetime && <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">👑 Lifetime</span>}
+                 </p>
+               </div>
+               <button
+                 onClick={() => {
+                   setShowMemberTicketsModal(false);
+                   setScannedMember(null);
+                   setMemberTickets([]);
+                   setSelectedMemberTickets([]);
+                 }}
+                 className="text-gray-400 hover:text-gray-600"
+               >
+                 ✕
+               </button>
+             </div>
+             
+             {memberTickets.length === 0 ? (
+               <div className="text-center py-8">
+                 <div className="text-gray-400 text-4xl mb-2">🎫</div>
+                 <p className="text-gray-600">Member ini belum memiliki tiket yang bisa di-redeem</p>
+               </div>
+             ) : (
+               <>
+                 <div className="mb-4">
+                   <div className="flex items-center justify-between">
+                     <p className="text-sm text-gray-600">
+                       Pilih tiket yang akan di-redeem ({selectedMemberTickets.length} dipilih)
+                     </p>
+                     <div className="flex gap-2">
+                       <button
+                         onClick={() => {
+                           const pendingTickets = memberTickets.filter(t => t.status === 'PENDING').map(t => t.id);
+                           setSelectedMemberTickets(pendingTickets);
+                         }}
+                         className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
+                       >
+                         Pilih Semua Pending
+                       </button>
+                       <button
+                         onClick={() => setSelectedMemberTickets([])}
+                         className="text-xs px-2 py-1 bg-gray-100 text-gray-800 rounded hover:bg-gray-200"
+                       >
+                         Batal Pilih
+                       </button>
+                     </div>
+                   </div>
+                 </div>
+
+                 <div className="space-y-3 mb-6">
+                   {memberTickets.map((ticket) => (
+                     <div
+                       key={ticket.id}
+                       className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                         ticket.status === 'REDEEMED' 
+                           ? 'bg-gray-50 border-gray-200 opacity-60 cursor-not-allowed' 
+                           : selectedMemberTickets.includes(ticket.id)
+                           ? 'bg-blue-50 border-blue-300'
+                           : 'bg-white border-gray-200 hover:border-gray-300'
+                       }`}
+                       onClick={() => {
+                         if (ticket.status === 'PENDING') {
+                           toggleTicketSelection(ticket.id);
+                         }
+                       }}
+                     >
+                       <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-3">
+                           <input
+                             type="checkbox"
+                             checked={selectedMemberTickets.includes(ticket.id)}
+                             disabled={ticket.status === 'REDEEMED'}
+                             onChange={() => {
+                               if (ticket.status === 'PENDING') {
+                                 toggleTicketSelection(ticket.id);
+                               }
+                             }}
+                             className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                           />
+                           <div>
+                             <h4 className="font-medium text-gray-900">{ticket.itemName}</h4>
+                             <p className="text-sm text-gray-600">
+                               {ticket.type === 'ticket' && '🎫 Tiket'}
+                               {ticket.type === 'points' && '💰 Poin Reward'}
+                               {ticket.type === 'event' && '📅 Event Registration'}
+                             </p>
+                             <p className="text-xs text-gray-500">
+                               Diklaim: {new Date(ticket.claimedAt).toLocaleDateString('id-ID')}
+                             </p>
+                           </div>
+                         </div>
+                         <div className="text-right">
+                           <span className={`px-2 py-1 text-xs rounded-full ${getStatusBadgeClass(ticket.status)}`}>
+                             {ticket.status === 'PENDING' ? 'Belum Redeem' : 'Sudah Redeem'}
+                           </span>
+                         </div>
+                       </div>
+                     </div>
+                   ))}
+                 </div>
+
+                 <div className="flex justify-end space-x-3">
+                   <button
+                     onClick={() => {
+                       setShowMemberTicketsModal(false);
+                       setScannedMember(null);
+                       setMemberTickets([]);
+                       setSelectedMemberTickets([]);
+                     }}
+                     className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+                   >
+                     Batal
+                   </button>
+                   <button
+                     onClick={handleRedeemSelectedTickets}
+                     disabled={selectedMemberTickets.length === 0 || redeemLoading}
+                     className="px-4 py-2 bg-[#0F4D39] text-white rounded-md hover:bg-[#0e3f30] disabled:opacity-50 disabled:cursor-not-allowed"
+                   >
+                     {redeemLoading ? "Memproses..." : `Redeem ${selectedMemberTickets.length} Tiket`}
+                   </button>
+                 </div>
+               </>
+             )}
            </div>
          </div>
        )}

@@ -119,7 +119,7 @@ function ResetPasswordForm() {
           <div className="mb-8">
             <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm p-4">
               <Image 
-                src="/LOGO TLG WHITE (1).svg" 
+                src="/logo-tlg-white.svg" 
                 alt="The Lodge Family Logo" 
                 width={96}
                 height={96}
@@ -183,7 +183,7 @@ function ResetPasswordForm() {
           <div className="lg:hidden text-center mb-8">
             <div className="w-16 h-16 bg-[#0F4D39] rounded-full mx-auto mb-4 flex items-center justify-center p-2">
               <Image 
-                  src="/LOGO TLG WHITE (1).svg" 
+                  src="/logo-tlg-white.svg" 
                   alt="The Lodge Family Logo" 
                   width={80}
                   height={80}
