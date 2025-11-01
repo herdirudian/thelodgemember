@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { PrismaClient, RedemptionStatus, RegistrationStatus, TicketStatus, PromoType } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
-import { verifyPayload, verifyFriendlyVoucherCode, signPayloadWithFriendlyCode } from '../utils/security';
+import { verifyPayload, verifyFriendlyVoucherCode } from '../utils/security';
 import multer from 'multer';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
@@ -15,25 +15,10 @@ import { generateQRDataURL } from '../utils/qr'
 import { createRedeemProofPDF } from '../utils/pdf'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
-import { NotificationService } from '../utils/notificationService';
 
 const prisma = new PrismaClient();
 const router = Router();
 dayjs.extend(isoWeek);
-
-console.log('🚀 Admin router initialized!');
-
-// Root endpoint for debugging
-router.get('/', (req, res) => {
-  console.log('🔥 Admin root endpoint hit!');
-  res.json({ message: 'Admin router root is working!' });
-});
-
-// Simple test endpoint
-router.get('/test', (req, res) => {
-  console.log('🔥 Test endpoint hit!');
-  res.json({ message: 'Admin router is working!' });
-});
 
 // In-memory cache for Settings with TTL
 const SETTINGS_CACHE_TTL_MS = 60_000; // 60 seconds
@@ -67,10 +52,6 @@ async function recordAdminActivity(info: { adminId: string; adminName?: string |
   try {
     // Prefer prisma client
     await (prisma as any).adminActivity.create({ data: payload });
-  } catch (e: any) {
-    console.error('Failed to record admin activity:', e);
-  }
-}
 
 // Redeem voucher by code endpoint
 router.post('/redeem-by-code', adminAuth, async (req, res) => {
@@ -135,7 +116,7 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
       const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
       const outputPath = path.join(uploadsDir, filename);
       
-      await createRedeemProofPDF({ 
+      createRedeemProofPDF({ 
         outputPath, 
         memberName, 
         voucherType: 'Tiket Gratis Member', 
@@ -148,7 +129,7 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
       
       const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
       
-      const redeemHistory = await prisma.redeemHistory.create({ 
+      await prisma.redeemHistory.create({ 
         data: { 
           memberId, 
           memberName, 
@@ -161,15 +142,6 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
           proofUrl 
         } 
       });
-
-      // Create notification for ticket redemption
-      try {
-        const { NotificationService } = await import('../utils/notificationService');
-        await NotificationService.createTicketClaimNotification(memberId, voucherLabel || 'Tiket', redeemHistory.id);
-      } catch (notifError) {
-        console.error('Error creating ticket claim notification:', notifError);
-        // Don't fail the redemption if notification fails
-      }
 
       result = {
         success: true,
@@ -222,7 +194,7 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
         const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
         const outputPath = path.join(uploadsDir, filename);
         
-        await createRedeemProofPDF({ 
+        createRedeemProofPDF({ 
           outputPath, 
           memberName, 
           voucherType: 'Redeem Poin', 
@@ -235,7 +207,7 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
         
         const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
         
-        const redeemHistory = await prisma.redeemHistory.create({ 
+        await prisma.redeemHistory.create({ 
           data: { 
             memberId, 
             memberName, 
@@ -248,15 +220,6 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
             proofUrl 
           } 
         });
-
-        // Create notification for point redemption
-        try {
-          const { NotificationService } = await import('../utils/notificationService');
-          await NotificationService.createTicketClaimNotification(memberId, voucherLabel || 'Redeem Poin', redeemHistory.id);
-        } catch (notifError) {
-          console.error('Error creating point redemption notification:', notifError);
-          // Don't fail the redemption if notification fails
-        }
 
         result = {
           success: true,
@@ -313,7 +276,7 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
         const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
         const outputPath = path.join(uploadsDir, filename);
         
-        await createRedeemProofPDF({ 
+        createRedeemProofPDF({ 
           outputPath, 
           memberName, 
           voucherType: 'Event Eksklusif Member', 
@@ -399,7 +362,7 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
         const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
         const outputPath = path.join(uploadsDir, filename);
         
-        await createRedeemProofPDF({ 
+        createRedeemProofPDF({ 
           outputPath, 
           memberName, 
           voucherType: 'Tiket Wisata', 
@@ -440,85 +403,6 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
       }
     }
 
-    // Jika belum ditemukan, cek benefit redemption
-    if (!voucherFound) {
-      const benefitRedemption = await prisma.benefitRedemption.findFirst({ 
-        where: { 
-          voucherCode: code
-        },
-        include: { 
-          member: true,
-          benefit: true
-        }
-      });
-
-      if (benefitRedemption) {
-        if (benefitRedemption.isUsed) {
-          return res.status(400).json({ message: 'Voucher benefit sudah pernah di-redeem' });
-        }
-
-        const updated = await prisma.benefitRedemption.update({ 
-          where: { id: benefitRedemption.id }, 
-          data: { isUsed: true, usedAt: redeemedAt } 
-        });
-
-        memberId = benefitRedemption.memberId;
-        memberName = benefitRedemption.member?.fullName || '';
-        voucherType = 'BENEFIT' as any;
-        voucherId = benefitRedemption.id;
-        voucherLabel = benefitRedemption.benefit?.title;
-
-        // Generate proof
-        const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
-        const qrCode = `REDEEM-${benefitRedemption.id}`;
-        const qrDataURL = await generateQRDataURL(qrCode);
-        
-        const uploadsDir = path.join(process.cwd(), 'uploads', 'redeem-proofs');
-        try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
-        const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
-        const outputPath = path.join(uploadsDir, filename);
-        
-        await createRedeemProofPDF({ 
-          outputPath, 
-          memberName, 
-          voucherType: 'Benefit Voucher', 
-          voucherLabel, 
-          redeemedAt, 
-          qrDataUrl: qrDataURL, 
-          adminName, 
-          companyName: 'The Lodge Family' 
-        });
-        
-        const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
-        
-        await prisma.redeemHistory.create({ 
-          data: { 
-            memberId, 
-            memberName, 
-            voucherType, 
-            voucherId, 
-            voucherLabel, 
-            redeemedAt, 
-            adminId, 
-            adminName, 
-            proofUrl 
-          } 
-        });
-
-        result = {
-          success: true,
-          memberName,
-          memberId,
-          voucherName: voucherLabel,
-          voucherType: 'Benefit Voucher',
-          qrCode,
-          proofUrl,
-          details: updated
-        };
-        voucherFound = true;
-      }
-    }
-
     if (!voucherFound) {
       return res.status(404).json({ message: 'Kode voucher tidak ditemukan atau tidak valid' });
     }
@@ -530,6 +414,34 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
     res.status(500).json({ message: e?.message || 'Server error' });
   }
 });
+  } catch (err) {
+    // Fallback raw SQL for MySQL
+    try {
+      const id = uuidv4();
+      // Pastikan tabel tersedia
+      try {
+        await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS AdminActivity (
+          id CHAR(36) NOT NULL,
+          adminId VARCHAR(191) NOT NULL,
+          adminName VARCHAR(191) NULL,
+          adminRole ENUM('CASHIER','MODERATOR','OWNER','SUPER_ADMIN') NULL,
+          method VARCHAR(16) NOT NULL,
+          path VARCHAR(255) NOT NULL,
+          status INT NOT NULL,
+          ip VARCHAR(64) NULL,
+          userAgent VARCHAR(255) NULL,
+          requestBody TEXT NULL,
+          query TEXT NULL,
+          createdAt DATETIME(3) NOT NULL,
+          PRIMARY KEY (id)
+        )`);
+      } catch {}
+      await prisma.$executeRaw`INSERT INTO AdminActivity (id, adminId, adminName, adminRole, method, path, status, ip, userAgent, requestBody, query, createdAt) VALUES (${id}, ${payload.adminId}, ${payload.adminName}, ${payload.adminRole}, ${payload.method}, ${payload.path}, ${payload.status}, ${payload.ip}, ${payload.userAgent}, ${payload.requestBody}, ${payload.query}, ${payload.createdAt})`;
+    } catch (e2) {
+      console.error('Failed to record admin activity:', e2);
+    }
+  }
+}
 
 async function adminAuth(req: any, res: any, next: any) {
   const hdr = req.headers.authorization || '';
@@ -538,13 +450,7 @@ async function adminAuth(req: any, res: any, next: any) {
   const pathname = String(req.originalUrl || req.path || '');
   const ip = (req.headers['x-forwarded-for'] as any) || req.ip || '';
   const ua = (req.headers['user-agent'] as any) || '';
-  
-  console.log('🔍 Authorization header:', hdr);
-  console.log('🔍 Extracted token:', token ? 'Token present' : 'No token');
-  console.log('🔍 Request path:', pathname);
-  
   if (!token) {
-    console.log('❌ No token provided');
     try {
       await recordAdminActivity({ adminId: 'unknown', method, path: pathname, status: 401, ip, ua, body: req.body, query: req.query });
     } catch {}
@@ -552,12 +458,7 @@ async function adminAuth(req: any, res: any, next: any) {
   }
   try {
     const payload: any = jwt.verify(token, config.jwtSecret);
-    console.log('🔍 JWT Payload:', JSON.stringify(payload, null, 2));
-    console.log('🔍 Payload role:', payload.role);
-    console.log('🔍 Role check result:', payload.role !== 'ADMIN');
-    
     if (payload.role !== 'ADMIN') {
-      console.log('❌ Role check failed - not ADMIN');
       try {
         await recordAdminActivity({ adminId: payload?.uid || 'unknown', method, path: pathname, status: 403, ip, ua, body: req.body, query: req.query });
       } catch {}
@@ -634,118 +535,20 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // Overview metrics
 router.get('/overview', adminAuth, async (_req, res) => {
-  try {
-    const [members, events, redeemedPoints, activeTickets, activePointVouchers, activeEventRegs] = await Promise.all([
-      prisma.member.count(),
-      prisma.event.count(),
-      prisma.pointRedemption.aggregate({ _sum: { pointsUsed: true }, where: { status: 'REDEEMED' } }),
-      prisma.ticket.count({ where: { status: 'ACTIVE' } }),
-      prisma.pointRedemption.count({ where: { status: 'ACTIVE' } }),
-      prisma.eventRegistration.count({ where: { status: 'REGISTERED' } }),
-    ]);
-    res.json({
-      totalMembers: members,
-      totalEvents: events,
-      totalRedeemedPoints: redeemedPoints._sum.pointsUsed || 0,
-      activeVouchers: activeTickets + activePointVouchers + activeEventRegs,
-    });
-  } catch (error) {
-    console.error('Overview endpoint error:', error);
-    res.status(500).json({ error: 'Failed to fetch overview data' });
-  }
-});
-
-// Search member by ID, phone, or email
-router.get('/search-member', adminAuth, async (req, res) => {
-  try {
-    const { query } = req.query;
-    
-    if (!query || typeof query !== 'string') {
-      return res.status(400).json({ message: 'Query parameter is required' });
-    }
-
-    const searchQuery = query.trim();
-    
-    // Search by member ID, phone, or email
-    const member = await prisma.member.findFirst({
-      where: {
-        OR: [
-          { id: searchQuery },
-          { phone: searchQuery },
-          { user: { email: searchQuery } }
-        ]
-      },
-      include: {
-        user: {
-          select: {
-            email: true,
-            fullName: true,
-            isActive: true
-          }
-        }
-      }
-    });
-
-    if (!member) {
-      return res.status(404).json({ message: 'Member tidak ditemukan' });
-    }
-
-    // Record admin activity
-    try {
-      const adminUser = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
-      await recordAdminActivity({
-        adminId: (req as any).user.uid,
-        adminName: adminUser?.fullName || 'Unknown',
-        adminRole: (req as any).user.adminRole,
-        method: 'GET',
-        path: '/api/admin/search-member',
-        status: 200,
-        ip: req.ip,
-        ua: req.headers['user-agent'],
-        body: {},
-        query: req.query
-      });
-    } catch (activityError) {
-      console.error('Failed to record admin activity:', activityError);
-    }
-
-    res.json({
-      id: member.id,
-      fullName: member.user?.fullName || member.fullName,
-      email: member.user?.email,
-      phoneNumber: member.phone, // Use phone field from schema
-      points: member.pointsBalance, // Use pointsBalance field from schema
-      membershipNumber: member.membershipNumber || member.id, // Use actual membershipNumber or fallback to ID
-      level: member.isLifetime ? 'LIFETIME' : 'REGULAR',
-      membershipLevel: member.isLifetime ? 'LIFETIME' : 'REGULAR',
-      isActive: member.user?.isActive ?? true,
-      isLifetime: member.isLifetime
-    });
-
-  } catch (error) {
-    console.error('Search member error:', error);
-    
-    // Record failed activity
-    try {
-      const adminUser = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
-      await recordAdminActivity({
-        adminId: (req as any).user.uid,
-        adminName: adminUser?.fullName || 'Unknown',
-        adminRole: (req as any).user.adminRole,
-        method: 'GET',
-        path: '/api/admin/search-member',
-        status: 500,
-        ip: req.ip,
-        ua: req.headers['user-agent'],
-        body: {},
-        query: req.query
-      });
-    } catch (activityError) {
-      console.error('Failed to record admin activity:', activityError);
-    }
-
-    res.status(500).json({ message: 'Gagal mencari member' });
-  }
+  const [members, events, redeemedPoints, activeTickets, activePointVouchers, activeEventRegs] = await Promise.all([
+    prisma.member.count(),
+    prisma.event.count(),
+    prisma.pointRedemption.aggregate({ _sum: { pointsUsed: true }, where: { status: 'REDEEMED' } }),
+    prisma.ticket.count({ where: { status: 'ACTIVE' } }),
+    prisma.pointRedemption.count({ where: { status: 'ACTIVE' } }),
+    prisma.eventRegistration.count({ where: { status: 'REGISTERED' } }),
+  ]);
+  res.json({
+    totalMembers: members,
+    totalEvents: events,
+    totalRedeemedPoints: redeemedPoints._sum.pointsUsed || 0,
+    activeVouchers: activeTickets + activePointVouchers + activeEventRegs,
+  });
 });
 
 // ==== Analytics Helpers ====
@@ -1073,50 +876,29 @@ router.get('/members', adminAuth, async (req, res) => {
       include: { user: true },
       orderBy: { registrationDate: 'desc' },
       take: limitNum,
-      where: {
-        // Exclude admin from members list
-        user: {
-          role: {
-            not: 'ADMIN'
-          }
-        }
-      }
     };
     
     // Add search functionality
     if (search && search.trim()) {
       const searchTerm = search.trim();
       findOpts.where = {
-        AND: [
-          // Keep the admin exclusion
+        OR: [
           {
-            user: {
-              role: {
-                not: 'ADMIN'
-              }
+            fullName: {
+              contains: searchTerm
             }
           },
-          // Add search conditions
           {
-            OR: [
-              {
-                fullName: {
-                  contains: searchTerm
-                }
-              },
-              {
-                phone: {
-                  contains: searchTerm
-                }
-              },
-              {
-                user: {
-                  email: {
-                    contains: searchTerm
-                  }
-                }
+            phone: {
+              contains: searchTerm
+            }
+          },
+          {
+            user: {
+              email: {
+                contains: searchTerm
               }
-            ]
+            }
           }
         ]
       };
@@ -1296,28 +1078,10 @@ router.delete('/registration-codes/:id', adminAuth, async (req, res) => {
 
 // Announcements
 router.post('/announcements', adminAuth, async (req, res) => {
-  try {
-    const { title, description, imageUrl } = req.body as { title: string; description: string; imageUrl?: string };
-    if (!title || !description) return res.status(400).json({ message: 'Missing fields' });
-    
-    const created = await prisma.announcement.create({ 
-      data: { title, description, imageUrl, createdBy: 'admin', postedAt: new Date() } 
-    });
-    
-    // Create notifications for all active members
-    try {
-      const { NotificationService } = await import('../utils/notificationService');
-      await NotificationService.createAnnouncementNotification(created.id, title, description);
-    } catch (notifError) {
-      console.error('Error creating announcement notifications:', notifError);
-      // Don't fail the announcement creation if notification fails
-    }
-    
-    res.json(created);
-  } catch (error) {
-    console.error('Error creating announcement:', error);
-    res.status(500).json({ message: 'Failed to create announcement' });
-  }
+  const { title, description, imageUrl } = req.body as { title: string; description: string; imageUrl?: string };
+  if (!title || !description) return res.status(400).json({ message: 'Missing fields' });
+  const created = await prisma.announcement.create({ data: { title, description, imageUrl, createdBy: 'admin', postedAt: new Date() } });
+  res.json(created);
 });
 
 // Events CRUD
@@ -1862,7 +1626,7 @@ router.post('/redeem', adminAuth, async (req, res) => {
       try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
       const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
       const outputPath = path.join(uploadsDir, filename);
-      await createRedeemProofPDF({ outputPath, memberName, voucherType: 'Tiket Gratis Member', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
+      createRedeemProofPDF({ outputPath, memberName, voucherType: 'Tiket Gratis Member', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
       const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
       await prisma.redeemHistory.create({ data: { memberId, memberName, voucherType, voucherId, voucherLabel, redeemedAt, adminId, adminName, proofUrl } });
       return res.json({ success: true, ticket: updated, proofUrl });
@@ -1884,7 +1648,7 @@ router.post('/redeem', adminAuth, async (req, res) => {
       try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
       const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
       const outputPath = path.join(uploadsDir, filename);
-      await createRedeemProofPDF({ outputPath, memberName, voucherType: 'Redeem Poin', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
+      createRedeemProofPDF({ outputPath, memberName, voucherType: 'Redeem Poin', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
       const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
       await prisma.redeemHistory.create({ data: { memberId, memberName, voucherType, voucherId, voucherLabel, redeemedAt, adminId, adminName, proofUrl } });
       return res.json({ success: true, redemption: updated, proofUrl });
@@ -1907,7 +1671,7 @@ router.post('/redeem', adminAuth, async (req, res) => {
       try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
       const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
       const outputPath = path.join(uploadsDir, filename);
-      await createRedeemProofPDF({ outputPath, memberName, voucherType: 'Event Eksklusif Member', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
+      createRedeemProofPDF({ outputPath, memberName, voucherType: 'Event Eksklusif Member', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
       const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
       await prisma.redeemHistory.create({ data: { memberId, memberName, voucherType, voucherId, voucherLabel, redeemedAt, adminId, adminName, proofUrl } });
       return res.json({ success: true, registration: updated, proofUrl });
@@ -1924,7 +1688,7 @@ router.get('/redeem-history', adminAuth, async (req, res) => {
   try {
     const { type, from, to, member } = req.query as { type?: string; from?: string; to?: string; member?: string };
     const where: any = {};
-    if (type && ['TICKET', 'POINTS', 'EVENT', 'TOURISM_TICKET', 'BENEFIT'].includes(type)) where.voucherType = type;
+    if (type && ['TICKET', 'POINTS', 'EVENT', 'TOURISM_TICKET'].includes(type)) where.voucherType = type;
     if (from || to) {
       where.redeemedAt = {};
       if (from) where.redeemedAt.gte = new Date(from);
@@ -1988,10 +1752,6 @@ router.post('/promos', adminAuth, upload.single('image'), async (req: any, res) 
       if (quota) data.quota = parseInt(quota, 10);
       if (eventId) data.eventId = String(eventId);
     }
-    if (type === 'FREE_BENEFIT_NEW_REG') {
-      if (quota) data.quota = parseInt(quota, 10);
-      if (maxRedeem) data.maxRedeem = parseInt(maxRedeem, 10);
-    }
     // Parse show buttons (string->boolean), Prisma default covers undefined
     if (typeof showMoreButton !== 'undefined') {
       const val = String(showMoreButton).toLowerCase();
@@ -2027,10 +1787,6 @@ router.put('/promos/:id', adminAuth, upload.single('image'), async (req: any, re
     }
     if (type === 'EVENT' || type === 'EXCLUSIVE_MEMBER') {
       if (quota) data.quota = parseInt(quota, 10);
-    }
-    if (type === 'FREE_BENEFIT_NEW_REG') {
-      if (quota) data.quota = parseInt(quota, 10);
-      if (maxRedeem) data.maxRedeem = parseInt(maxRedeem, 10);
     }
     if (typeof eventId !== 'undefined') {
       data.eventId = eventId === '' ? null : String(eventId);
@@ -2353,7 +2109,7 @@ router.post('/redeem', adminAuth, async (req, res) => {
       try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
       const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
       const outputPath = path.join(uploadsDir, filename);
-      await createRedeemProofPDF({ outputPath, memberName, voucherType: 'Tiket Gratis Member', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
+      createRedeemProofPDF({ outputPath, memberName, voucherType: 'Tiket Gratis Member', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
       const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
       await prisma.redeemHistory.create({ data: { memberId, memberName, voucherType, voucherId, voucherLabel, redeemedAt, adminId, adminName, proofUrl } });
       return res.json({ success: true, ticket: updated, proofUrl });
@@ -2375,7 +2131,7 @@ router.post('/redeem', adminAuth, async (req, res) => {
       try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
       const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
       const outputPath = path.join(uploadsDir, filename);
-      await createRedeemProofPDF({ outputPath, memberName, voucherType: 'Redeem Poin', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
+      createRedeemProofPDF({ outputPath, memberName, voucherType: 'Redeem Poin', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
       const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
       await prisma.redeemHistory.create({ data: { memberId, memberName, voucherType, voucherId, voucherLabel, redeemedAt, adminId, adminName, proofUrl } });
       return res.json({ success: true, redemption: updated, proofUrl });
@@ -2398,7 +2154,7 @@ router.post('/redeem', adminAuth, async (req, res) => {
       try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
       const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
       const outputPath = path.join(uploadsDir, filename);
-      await createRedeemProofPDF({ outputPath, memberName, voucherType: 'Event Eksklusif Member', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
+      createRedeemProofPDF({ outputPath, memberName, voucherType: 'Event Eksklusif Member', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
       const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
       await prisma.redeemHistory.create({ data: { memberId, memberName, voucherType, voucherId, voucherLabel, redeemedAt, adminId, adminName, proofUrl } });
       return res.json({ success: true, registration: updated, proofUrl });
@@ -2415,7 +2171,7 @@ router.get('/redeem-history', adminAuth, async (req, res) => {
   try {
     const { type, from, to, member } = req.query as { type?: string; from?: string; to?: string; member?: string };
     const where: any = {};
-    if (type && ['TICKET', 'POINTS', 'EVENT', 'TOURISM_TICKET', 'BENEFIT'].includes(type)) where.voucherType = type;
+    if (type && ['TICKET', 'POINTS', 'EVENT', 'TOURISM_TICKET'].includes(type)) where.voucherType = type;
     if (from || to) {
       where.redeemedAt = {};
       if (from) where.redeemedAt.gte = new Date(from);
@@ -3185,6 +2941,282 @@ router.post('/slider-images/:id/reorder', adminAuth, async (req, res) => {
   }
 });
 
+// Redeem voucher by code endpoint (DUPLICATE - DISABLED)
+// router.post('/redeem-by-code', adminAuth, async (req, res) => {
+  // const { voucherCode } = req.body as { voucherCode: string };
+  
+  if (!voucherCode || !voucherCode.trim()) {
+    return res.status(400).json({ message: 'Kode voucher diperlukan' });
+  }
+
+  try {
+    // Ambil info admin untuk pencatatan
+    const adminUser = await prisma.user.findUnique({ where: { id: req.user?.uid } });
+    const adminId = adminUser?.id || req.user?.uid || 'unknown';
+    const adminName = adminUser?.email || 'admin';
+
+    const code = voucherCode.trim().toUpperCase();
+    let voucherFound = false;
+    let result: any = null;
+
+    // Siapkan variabel umum untuk RedeemHistory
+    let memberId = '';
+    let memberName = '';
+    let voucherType: VoucherType = 'TICKET' as any;
+    let voucherId = '';
+    let voucherLabel: string | undefined = undefined;
+    const redeemedAt = new Date();
+
+    // Cek apakah ini kode tiket
+    const ticket = await prisma.ticket.findFirst({ 
+      where: { 
+        OR: [
+          { friendlyCode: code },
+          { id: code }
+        ]
+      },
+      include: { member: true }
+    });
+
+    if (ticket) {
+      if (ticket.status === 'REDEEMED') {
+        return res.status(400).json({ message: 'Tiket sudah pernah di-redeem' });
+      }
+
+      const updated = await prisma.ticket.update({ 
+        where: { id: ticket.id }, 
+        data: { status: 'REDEEMED', redeemedAt } 
+      });
+
+      memberId = ticket.memberId;
+      memberName = ticket.member?.fullName || '';
+      voucherType = 'TICKET' as any;
+      voucherId = ticket.id;
+      voucherLabel = ticket.name;
+
+      // Generate proof
+      const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
+      const qrCode = `REDEEM-${ticket.id}`;
+      const qrDataURL = await generateQRDataURL(qrCode);
+      
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'redeem-proofs');
+      try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
+      const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
+      const outputPath = path.join(uploadsDir, filename);
+      
+      createRedeemProofPDF({ 
+        outputPath, 
+        memberName, 
+        voucherType: 'Tiket Gratis Member', 
+        voucherLabel, 
+        redeemedAt, 
+        qrDataUrl: qrDataURL, 
+        adminName, 
+        companyName: 'The Lodge Family' 
+      });
+      
+      const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
+      
+      await prisma.redeemHistory.create({ 
+        data: { 
+          memberId, 
+          memberName, 
+          voucherType, 
+          voucherId, 
+          voucherLabel, 
+          redeemedAt, 
+          adminId, 
+          adminName, 
+          proofUrl 
+        } 
+      });
+
+      result = {
+        success: true,
+        memberName,
+        memberId,
+        voucherName: voucherLabel,
+        voucherType: 'Tiket',
+        qrCode,
+        proofUrl,
+        details: updated
+      };
+      voucherFound = true;
+    }
+
+    // Jika belum ditemukan, cek point redemption
+    if (!voucherFound) {
+      const pointRedemption = await prisma.pointRedemption.findFirst({ 
+        where: { 
+          OR: [
+            { friendlyCode: code },
+            { id: code }
+          ]
+        },
+        include: { member: true }
+      });
+
+      if (pointRedemption) {
+        if (pointRedemption.status === 'REDEEMED') {
+          return res.status(400).json({ message: 'Redeem poin sudah pernah di-redeem' });
+        }
+
+        const updated = await prisma.pointRedemption.update({ 
+          where: { id: pointRedemption.id }, 
+          data: { status: 'REDEEMED', redeemedAt } 
+        });
+
+        memberId = pointRedemption.memberId;
+        memberName = pointRedemption.member?.fullName || '';
+        voucherType = 'POINTS' as any;
+        voucherId = pointRedemption.id;
+        voucherLabel = pointRedemption.rewardName;
+
+        // Generate proof
+        const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
+        const qrCode = `REDEEM-${pointRedemption.id}`;
+        const qrDataURL = await generateQRDataURL(qrCode);
+        
+        const uploadsDir = path.join(process.cwd(), 'uploads', 'redeem-proofs');
+        try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
+        const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
+        const outputPath = path.join(uploadsDir, filename);
+        
+        createRedeemProofPDF({ 
+          outputPath, 
+          memberName, 
+          voucherType: 'Redeem Poin', 
+          voucherLabel, 
+          redeemedAt, 
+          qrDataUrl: qrDataURL, 
+          adminName, 
+          companyName: 'The Lodge Family' 
+        });
+        
+        const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
+        
+        await prisma.redeemHistory.create({ 
+          data: { 
+            memberId, 
+            memberName, 
+            voucherType, 
+            voucherId, 
+            voucherLabel, 
+            redeemedAt, 
+            adminId, 
+            adminName, 
+            proofUrl 
+          } 
+        });
+
+        result = {
+          success: true,
+          memberName,
+          memberId,
+          voucherName: voucherLabel,
+          voucherType: 'Poin',
+          qrCode,
+          proofUrl,
+          details: updated
+        };
+        voucherFound = true;
+      }
+    }
+
+    // Jika belum ditemukan, cek event registration
+    if (!voucherFound) {
+      const eventReg = await prisma.eventRegistration.findFirst({ 
+        where: { 
+          OR: [
+            { friendlyCode: code },
+            { id: code }
+          ]
+        },
+        include: { 
+          member: true,
+          event: true
+        }
+      });
+
+      if (eventReg) {
+        if (eventReg.status === 'REDEEMED') {
+          return res.status(400).json({ message: 'Registrasi event sudah pernah di-redeem' });
+        }
+
+        const updated = await prisma.eventRegistration.update({ 
+          where: { id: eventReg.id }, 
+          data: { status: 'REDEEMED', redeemedAt } 
+        });
+
+        memberId = eventReg.memberId;
+        memberName = eventReg.member?.fullName || '';
+        voucherType = 'EVENT' as any;
+        voucherId = eventReg.id;
+        voucherLabel = eventReg.event?.title;
+
+        // Generate proof
+        const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
+        const qrCode = `REDEEM-${eventReg.id}`;
+        const qrDataURL = await generateQRDataURL(qrCode);
+        
+        const uploadsDir = path.join(process.cwd(), 'uploads', 'redeem-proofs');
+        try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
+        const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
+        const outputPath = path.join(uploadsDir, filename);
+        
+        createRedeemProofPDF({ 
+          outputPath, 
+          memberName, 
+          voucherType: 'Event Eksklusif Member', 
+          voucherLabel, 
+          redeemedAt, 
+          qrDataUrl: qrDataURL, 
+          adminName, 
+          companyName: 'The Lodge Family' 
+        });
+        
+        const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
+        
+        await prisma.redeemHistory.create({ 
+          data: { 
+            memberId, 
+            memberName, 
+            voucherType, 
+            voucherId, 
+            voucherLabel, 
+            redeemedAt, 
+            adminId, 
+            adminName, 
+            proofUrl 
+          } 
+        });
+
+        result = {
+          success: true,
+          memberName,
+          memberId,
+          voucherName: voucherLabel,
+          voucherType: 'Event',
+          qrCode,
+          proofUrl,
+          details: updated
+        };
+        voucherFound = true;
+      }
+    }
+
+    if (!voucherFound) {
+      return res.status(404).json({ message: 'Kode voucher tidak ditemukan atau tidak valid' });
+    }
+
+    return res.json(result);
+
+  } catch (e: any) {
+    console.error('Redeem by code error:', e);
+    res.status(500).json({ message: e?.message || 'Server error' });
+  }
+});
+
 // Tourism Tickets endpoints
 router.get('/tourism-tickets', adminAuth, async (req: any, res: any) => {
   try {
@@ -3290,9 +3322,9 @@ router.post('/tourism-tickets', adminAuth, upload.single('image'), async (req: a
     });
 
     await recordAdminActivity({
-      adminId: (req as any).user!.id,
-      adminName: (req as any).user!.name,
-      adminRole: (req as any).user!.role,
+      adminId: req.user!.id,
+      adminName: req.user!.name,
+      adminRole: req.user!.role,
       method: req.method,
       path: req.path,
       status: 201,
@@ -3374,23 +3406,18 @@ router.put('/tourism-tickets/:id', adminAuth, upload.single('image'), async (req
       data: updateData
     });
 
-    try {
-      const user = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
-      await recordAdminActivity({
-        adminId: (req as any).user.uid,
-        adminName: user?.fullName || 'Unknown',
-        adminRole: (req as any).user.adminRole,
-        method: req.method,
-        path: req.path,
-        status: 200,
-        ip: req.ip,
-        ua: req.get('User-Agent'),
-        body: req.body,
-        query: req.query
-      });
-    } catch (activityError) {
-      console.error('Failed to record admin activity:', activityError);
-    }
+    await recordAdminActivity({
+      adminId: req.user!.id,
+      adminName: req.user!.name,
+      adminRole: req.user!.role,
+      method: req.method,
+      path: req.path,
+      status: 200,
+      ip: req.ip,
+      ua: req.get('User-Agent'),
+      body: req.body,
+      query: req.query
+    });
 
     res.json({ message: 'Tourism ticket updated successfully', ticket });
   } catch (error: any) {
@@ -3408,23 +3435,18 @@ router.delete('/tourism-tickets/:id', adminAuth, async (req: any, res: any) => {
       data: { isActive: false }
     });
 
-    try {
-      const user = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
-      await recordAdminActivity({
-        adminId: (req as any).user.uid,
-        adminName: user?.fullName || 'Unknown',
-        adminRole: (req as any).user.adminRole,
-        method: req.method,
-        path: req.path,
-        status: 200,
-        ip: req.ip,
-        ua: req.get('User-Agent'),
-        body: req.body,
-        query: req.query
-      });
-    } catch (activityError) {
-      console.error('Failed to record admin activity:', activityError);
-    }
+    await recordAdminActivity({
+      adminId: req.user!.id,
+      adminName: req.user!.name,
+      adminRole: req.user!.role,
+      method: req.method,
+      path: req.path,
+      status: 200,
+      ip: req.ip,
+      ua: req.get('User-Agent'),
+      body: req.body,
+      query: req.query
+    });
 
     res.json({ message: 'Tourism ticket deleted successfully' });
   } catch (error: any) {
@@ -3527,9 +3549,9 @@ router.post('/accommodations', adminAuth, upload.single('image'), async (req: an
     });
 
     await recordAdminActivity({
-      adminId: (req as any).user!.id,
-      adminName: (req as any).user!.name,
-      adminRole: (req as any).user!.role,
+      adminId: req.user!.id,
+      adminName: req.user!.name,
+      adminRole: req.user!.role,
       method: req.method,
       path: req.path,
       status: 201,
@@ -3600,23 +3622,18 @@ router.put('/accommodations/:id', adminAuth, upload.single('image'), async (req:
       data: updateData
     });
 
-    try {
-      const user = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
-      await recordAdminActivity({
-        adminId: (req as any).user.uid,
-        adminName: user?.fullName || 'Unknown',
-        adminRole: (req as any).user.adminRole,
-        method: req.method,
-        path: req.path,
-        status: 200,
-        ip: req.ip,
-        ua: req.get('User-Agent'),
-        body: req.body,
-        query: req.query
-      });
-    } catch (activityError) {
-      console.error('Failed to record admin activity:', activityError);
-    }
+    await recordAdminActivity({
+      adminId: req.user!.id,
+      adminName: req.user!.name,
+      adminRole: req.user!.role,
+      method: req.method,
+      path: req.path,
+      status: 200,
+      ip: req.ip,
+      ua: req.get('User-Agent'),
+      body: req.body,
+      query: req.query
+    });
 
     res.json({ message: 'Accommodation updated successfully', accommodation });
   } catch (error: any) {
@@ -3634,23 +3651,18 @@ router.delete('/accommodations/:id', adminAuth, async (req: any, res: any) => {
       data: { isActive: false }
     });
 
-    try {
-      const user = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
-      await recordAdminActivity({
-        adminId: (req as any).user.uid,
-        adminName: user?.fullName || 'Unknown',
-        adminRole: (req as any).user.adminRole,
-        method: req.method,
-        path: req.path,
-        status: 200,
-        ip: req.ip,
-        ua: req.get('User-Agent'),
-        body: req.body,
-        query: req.query
-      });
-    } catch (activityError) {
-      console.error('Failed to record admin activity:', activityError);
-    }
+    await recordAdminActivity({
+      adminId: req.user!.id,
+      adminName: req.user!.name,
+      adminRole: req.user!.role,
+      method: req.method,
+      path: req.path,
+      status: 200,
+      ip: req.ip,
+      ua: req.get('User-Agent'),
+      body: req.body,
+      query: req.query
+    });
 
     res.json({ message: 'Accommodation deleted successfully' });
   } catch (error: any) {
@@ -3685,9 +3697,9 @@ router.post('/test-xendit', adminAuth, async (req: any, res: any) => {
       const data = await response.json();
       
       await recordAdminActivity({
-        adminId: (req as any).user!.id,
-        adminName: (req as any).user!.name,
-        adminRole: (req as any).user!.role,
+        adminId: req.user!.id,
+        adminName: req.user!.name,
+        adminRole: req.user!.role,
         method: req.method,
         path: req.path,
         status: 200,
@@ -3706,9 +3718,9 @@ router.post('/test-xendit', adminAuth, async (req: any, res: any) => {
       const errorData = await response.text();
       
       await recordAdminActivity({
-        adminId: (req as any).user!.id,
-        adminName: (req as any).user!.name,
-        adminRole: (req as any).user!.role,
+        adminId: req.user!.id,
+        adminName: req.user!.name,
+        adminRole: req.user!.role,
         method: req.method,
         path: req.path,
         status: response.status,
@@ -3726,778 +3738,24 @@ router.post('/test-xendit', adminAuth, async (req: any, res: any) => {
   } catch (error: any) {
     console.error('Test Xendit error:', error);
     
-    try {
-      const user = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
-      await recordAdminActivity({
-        adminId: (req as any).user.uid,
-        adminName: user?.fullName || 'Unknown',
-        adminRole: (req as any).user.adminRole,
-        method: req.method,
-        path: req.path,
-        status: 500,
-        ip: req.ip,
-        ua: req.get('User-Agent'),
-        body: req.body,
-        query: req.query
-      });
-    } catch (activityError) {
-      console.error('Failed to record admin activity:', activityError);
-    }
+    await recordAdminActivity({
+      adminId: req.user!.id,
+      adminName: req.user!.name,
+      adminRole: req.user!.role,
+      method: req.method,
+      path: req.path,
+      status: 500,
+      ip: req.ip,
+      ua: req.get('User-Agent'),
+      body: req.body,
+      query: req.query
+    });
 
     res.status(500).json({ 
       success: false, 
       message: error?.message || 'Failed to test Xendit connection' 
     });
   }
-});
-
-// Benefits Management Endpoints
-// Get all benefits
-router.get('/benefits', adminAuth, async (req, res) => {
-  console.log('🔍 Admin benefits endpoint hit!', {
-    user: req.user?.email,
-    role: req.user?.role,
-    query: req.query
-  });
-  try {
-    const { page = 1, limit = 10, search = '', status = 'all' } = req.query;
-    const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
-    const offset = (pageNum - 1) * limitNum;
-
-    const where: any = {};
-    
-    if (search) {
-      where.OR = [
-        { title: { contains: search as string } },
-        { description: { contains: search as string } }
-      ];
-    }
-    
-    if (status !== 'all') {
-      where.isActive = status === 'active';
-    }
-
-    const [benefits, total] = await Promise.all([
-      prisma.benefit.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: offset,
-        take: limitNum
-      }),
-      prisma.benefit.count({ where })
-    ]);
-
-    try {
-      const user = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
-      await recordAdminActivity({
-        adminId: (req as any).user.uid,
-        adminName: user?.fullName || 'Unknown',
-        adminRole: (req as any).user.adminRole,
-        method: req.method,
-        path: req.path,
-        status: 200,
-        ip: req.ip,
-        ua: req.get('User-Agent'),
-        body: req.body,
-        query: req.query
-      });
-    } catch (activityError) {
-      console.error('Failed to record admin activity:', activityError);
-    }
-
-    res.json({
-      benefits,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total,
-        totalPages: Math.ceil(total / limitNum)
-      }
-    });
-  } catch (error: any) {
-    console.error('Get benefits error:', error);
-    
-    try {
-      const user = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
-      await recordAdminActivity({
-        adminId: (req as any).user.uid,
-        adminName: user?.fullName || 'Unknown',
-        adminRole: (req as any).user.adminRole,
-        method: req.method,
-        path: req.path,
-        status: 500,
-        ip: req.ip,
-        ua: req.get('User-Agent'),
-        body: req.body,
-        query: req.query
-      });
-    } catch (activityError) {
-      console.error('Failed to record admin activity:', activityError);
-    }
-
-    res.status(500).json({ message: error?.message || 'Failed to fetch benefits' });
-  }
-});
-
-// Create new benefit
-router.post('/benefits', adminAuth, upload.single('image'), async (req: any, res) => {
-  try {
-    const { title, description, validFrom, validUntil, isActive } = req.body;
-    
-    if (!title || !description) {
-      return res.status(400).json({ message: 'Title and description are required' });
-    }
-
-    let imageUrl = null;
-    if (req.file) {
-      try {
-        const result = await cloudinary.uploader.upload(req.file.path, {
-          folder: 'benefits',
-          public_id: `benefit_${uuidv4()}`,
-          overwrite: true,
-          resource_type: 'image'
-        });
-        imageUrl = result.secure_url;
-        
-        // Clean up temp file
-        fs.unlinkSync(req.file.path);
-      } catch (uploadError) {
-        console.error('Image upload error:', uploadError);
-        if (req.file?.path && fs.existsSync(req.file.path)) {
-          fs.unlinkSync(req.file.path);
-        }
-      }
-    }
-
-    const benefit = await prisma.benefit.create({
-      data: {
-        title,
-        description,
-        imageUrl,
-        isActive: isActive === 'true' || isActive === true,
-        validFrom: validFrom ? new Date(validFrom) : new Date(),
-        validUntil: validUntil ? new Date(validUntil) : null,
-        createdBy: (req as any).user.uid
-      }
-    });
-
-    try {
-      const user = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
-      await recordAdminActivity({
-        adminId: (req as any).user.uid,
-        adminName: user?.fullName || 'Unknown',
-        adminRole: (req as any).user.adminRole,
-        method: req.method,
-        path: req.path,
-        status: 201,
-        ip: req.ip,
-        ua: req.get('User-Agent'),
-        body: { title, description, isActive },
-        query: req.query
-      });
-    } catch (activityError) {
-      console.error('Failed to record admin activity:', activityError);
-    }
-
-    res.status(201).json({ message: 'Benefit created successfully', benefit });
-  } catch (error: any) {
-    console.error('Create benefit error:', error);
-    
-    // Clean up temp file if exists
-    if (req.file?.path && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    
-    try {
-      const user = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
-      await recordAdminActivity({
-        adminId: (req as any).user.uid,
-        adminName: user?.fullName || 'Unknown',
-        adminRole: (req as any).user.adminRole,
-        method: req.method,
-        path: req.path,
-        status: 500,
-        ip: req.ip,
-        ua: req.get('User-Agent'),
-        body: req.body,
-        query: req.query
-      });
-    } catch (activityError) {
-      console.error('Failed to record admin activity:', activityError);
-    }
-
-    res.status(500).json({ message: error?.message || 'Failed to create benefit' });
-  }
-});
-
-// Update benefit
-router.put('/benefits/:id', adminAuth, upload.single('image'), async (req: any, res) => {
-  try {
-    const { id } = req.params;
-    const { title, description, validFrom, validUntil, isActive } = req.body;
-
-    const existingBenefit = await prisma.benefit.findUnique({ where: { id } });
-    if (!existingBenefit) {
-      return res.status(404).json({ message: 'Benefit not found' });
-    }
-
-    let imageUrl = existingBenefit.imageUrl;
-    if (req.file) {
-      try {
-        const result = await cloudinary.uploader.upload(req.file.path, {
-          folder: 'benefits',
-          public_id: `benefit_${uuidv4()}`,
-          overwrite: true,
-          resource_type: 'image'
-        });
-        imageUrl = result.secure_url;
-        
-        // Clean up temp file
-        fs.unlinkSync(req.file.path);
-      } catch (uploadError) {
-        console.error('Image upload error:', uploadError);
-        if (req.file?.path && fs.existsSync(req.file.path)) {
-          fs.unlinkSync(req.file.path);
-        }
-      }
-    }
-
-    const benefit = await prisma.benefit.update({
-      where: { id },
-      data: {
-        title: title || existingBenefit.title,
-        description: description || existingBenefit.description,
-        imageUrl,
-        isActive: isActive !== undefined ? (isActive === 'true' || isActive === true) : existingBenefit.isActive,
-        validFrom: validFrom ? new Date(validFrom) : existingBenefit.validFrom,
-        validUntil: validUntil ? new Date(validUntil) : existingBenefit.validUntil
-      }
-    });
-
-    try {
-      const user = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
-      await recordAdminActivity({
-        adminId: (req as any).user.uid,
-        adminName: user?.fullName || 'Unknown',
-        adminRole: (req as any).user.adminRole,
-        method: req.method,
-        path: req.path,
-        status: 200,
-        ip: req.ip,
-        ua: req.get('User-Agent'),
-        body: { title, description, isActive },
-        query: req.query
-      });
-    } catch (activityError) {
-      console.error('Failed to record admin activity:', activityError);
-    }
-
-    res.json({ message: 'Benefit updated successfully', benefit });
-  } catch (error: any) {
-    console.error('Update benefit error:', error);
-    
-    // Clean up temp file if exists
-    if (req.file?.path && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    
-    try {
-      const user = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
-      await recordAdminActivity({
-        adminId: (req as any).user.uid,
-        adminName: user?.fullName || 'Unknown',
-        adminRole: (req as any).user.adminRole,
-        method: req.method,
-        path: req.path,
-        status: 500,
-        ip: req.ip,
-        ua: req.get('User-Agent'),
-        body: req.body,
-        query: req.query
-      });
-    } catch (activityError) {
-      console.error('Failed to record admin activity:', activityError);
-    }
-
-    res.status(500).json({ message: error?.message || 'Failed to update benefit' });
-  }
-});
-
-// Delete benefit
-router.delete('/benefits/:id', adminAuth, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const existingBenefit = await prisma.benefit.findUnique({ where: { id } });
-    if (!existingBenefit) {
-      return res.status(404).json({ message: 'Benefit not found' });
-    }
-
-    await prisma.benefit.delete({ where: { id } });
-
-    try {
-      const user = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
-      await recordAdminActivity({
-        adminId: (req as any).user.uid,
-        adminName: user?.fullName || 'Unknown',
-        adminRole: (req as any).user.adminRole,
-        method: req.method,
-        path: req.path,
-        status: 200,
-        ip: req.ip,
-        ua: req.get('User-Agent'),
-        body: req.body,
-        query: req.query
-      });
-    } catch (activityError) {
-      console.error('Failed to record admin activity:', activityError);
-    }
-
-    res.json({ message: 'Benefit deleted successfully' });
-  } catch (error: any) {
-    console.error('Delete benefit error:', error);
-    
-    try {
-      const user = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
-      await recordAdminActivity({
-        adminId: (req as any).user.uid,
-        adminName: user?.fullName || 'Unknown',
-        adminRole: (req as any).user.adminRole,
-        method: req.method,
-        path: req.path,
-        status: 500,
-        ip: req.ip,
-        ua: req.get('User-Agent'),
-        body: req.body,
-        query: req.query
-      });
-    } catch (activityError) {
-      console.error('Failed to record admin activity:', activityError);
-    }
-
-    res.status(500).json({ message: error?.message || 'Failed to delete benefit' });
-  }
-});
-
-// Toggle benefit status
-router.post('/benefits/:id/toggle-status', adminAuth, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const existingBenefit = await prisma.benefit.findUnique({ where: { id } });
-    if (!existingBenefit) {
-      return res.status(404).json({ message: 'Benefit not found' });
-    }
-
-    const benefit = await prisma.benefit.update({
-      where: { id },
-      data: { isActive: !existingBenefit.isActive }
-    });
-
-    try {
-      const user = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
-      await recordAdminActivity({
-        adminId: (req as any).user.uid,
-        adminName: user?.fullName || 'Unknown',
-        adminRole: (req as any).user.adminRole,
-        method: req.method,
-        path: req.path,
-        status: 200,
-        ip: req.ip,
-        ua: req.get('User-Agent'),
-        body: req.body,
-        query: req.query
-      });
-    } catch (activityError) {
-      console.error('Failed to record admin activity:', activityError);
-    }
-
-    res.json({ 
-      message: `Benefit ${benefit.isActive ? 'activated' : 'deactivated'} successfully`, 
-      benefit 
-    });
-  } catch (error: any) {
-    console.error('Toggle benefit status error:', error);
-    
-    try {
-      const user = await prisma.user.findUnique({ where: { id: (req as any).user.uid } });
-      await recordAdminActivity({
-        adminId: (req as any).user.uid,
-        adminName: user?.fullName || 'Unknown',
-        adminRole: (req as any).user.adminRole,
-        method: req.method,
-        path: req.path,
-        status: 500,
-        ip: req.ip,
-        ua: req.get('User-Agent'),
-        body: req.body,
-        query: req.query
-      });
-    } catch (activityError) {
-      console.error('Failed to record admin activity:', activityError);
-    }
-
-    res.status(500).json({ message: error?.message || 'Failed to toggle benefit status' });
-  }
-});
-
-// Missing endpoints that frontend components are calling
-
-// PUT /api/admin/members/:id - Update member
-router.put('/members/:id', adminAuth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = req.body;
-    
-    const member = await prisma.user.update({
-      where: { id },
-      data: updateData
-    });
-
-    await recordAdminActivity({
-      adminId: (req as any).user!.id,
-      adminName: (req as any).user!.name,
-      adminRole: (req as any).user!.role,
-      method: req.method,
-      path: req.path,
-      status: 200,
-      ip: req.ip,
-      ua: req.get('User-Agent'),
-      body: req.body,
-      query: req.query
-    });
-
-    res.json({ message: 'Member updated successfully', member });
-  } catch (error: any) {
-    console.error('Update member error:', error);
-    res.status(500).json({ message: error?.message || 'Failed to update member' });
-  }
-});
-
-// DELETE /api/admin/members/:id - Delete member
-router.delete('/members/:id', adminAuth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    await prisma.user.delete({
-      where: { id }
-    });
-
-    await recordAdminActivity({
-      adminId: (req as any).user!.id,
-      adminName: (req as any).user!.name,
-      adminRole: (req as any).user!.role,
-      method: req.method,
-      path: req.path,
-      status: 200,
-      ip: req.ip,
-      ua: req.get('User-Agent'),
-      body: req.body,
-      query: req.query
-    });
-
-    res.json({ message: 'Member deleted successfully' });
-  } catch (error: any) {
-    console.error('Delete member error:', error);
-    res.status(500).json({ message: error?.message || 'Failed to delete member' });
-  }
-});
-
-// POST /api/admin/members/:id/adjust-points - Adjust member points
-router.post('/members/:id/adjust-points', adminAuth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { points, reason } = req.body;
-    
-    const member = await prisma.user.findUnique({
-      where: { id },
-      include: { member: true }
-    });
-
-    if (!member || !member.member) {
-      return res.status(404).json({ message: 'Member not found' });
-    }
-
-    const currentPoints = member.member.pointsBalance || 0;
-    const newPoints = currentPoints + points;
-
-    await prisma.member.update({
-      where: { userId: id },
-      data: { pointsBalance: newPoints }
-    });
-
-    // Record the transaction
-    await prisma.pointAdjustment.create({
-      data: {
-        memberId: member.id,
-        points: points,
-        type: points > 0 ? 'ADD' : 'SUBTRACT',
-        reason: reason || 'Admin adjustment',
-        adminId: (req as any).user!.id,
-        adminName: (req as any).user!.name || 'Unknown Admin'
-      }
-    });
-
-    await recordAdminActivity({
-      adminId: (req as any).user!.id,
-      adminName: (req as any).user!.name,
-      adminRole: (req as any).user!.role,
-      method: req.method,
-      path: req.path,
-      status: 200,
-      ip: req.ip,
-      ua: req.get('User-Agent'),
-      body: req.body,
-      query: req.query
-    });
-
-    res.json({ message: 'Points adjusted successfully', newPoints });
-  } catch (error: any) {
-    console.error('Adjust points error:', error);
-    res.status(500).json({ message: error?.message || 'Failed to adjust points' });
-  }
-});
-
-// GET /api/admin/tickets - Get tickets for redeem voucher
-router.get('/tickets', adminAuth, async (req, res) => {
-  try {
-    const tickets = await prisma.tourismTicket.findMany({
-      where: { isActive: true },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    res.json(tickets);
-  } catch (error: any) {
-    console.error('Get tickets error:', error);
-    res.status(500).json({ message: error?.message || 'Failed to get tickets' });
-  }
-});
-
-// GET /api/admin/point-redemptions - Get point redemptions for redeem voucher
-router.get('/point-redemptions', adminAuth, async (req, res) => {
-  try {
-    const redemptions = await prisma.pointRedemption.findMany({
-      include: {
-        member: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-                fullName: true
-              }
-            }
-          }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    res.json(redemptions);
-  } catch (error: any) {
-    console.error('Get point redemptions error:', error);
-    res.status(500).json({ message: error?.message || 'Failed to get point redemptions' });
-  }
-});
-
-// GET /api/admin/event-registrations - Get event registrations for redeem voucher
-router.get('/event-registrations', adminAuth, async (req, res) => {
-  try {
-    const registrations = await prisma.eventRegistration.findMany({
-      include: {
-        member: {
-          select: {
-            id: true,
-            fullName: true,
-            user: {
-              select: {
-                id: true,
-                email: true
-              }
-            }
-          }
-        },
-        event: {
-          select: {
-            id: true,
-            title: true
-          }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    res.json(registrations);
-  } catch (error: any) {
-    console.error('Get event registrations error:', error);
-    res.status(500).json({ message: error?.message || 'Failed to get event registrations' });
-  }
-});
-
-// POST /api/admin/create-ticket-for-member - Admin creates ticket for specific member
-router.post('/create-ticket-for-member', adminAuth, async (req, res) => {
-  try {
-    const { memberId, memberEmail, ticketName, description, validUntil } = req.body;
-
-    if (!ticketName) {
-      return res.status(400).json({
-        success: false,
-        message: 'Nama tiket harus diisi'
-      });
-    }
-
-    let member;
-    let memberUser;
-    
-    // Find member by ID or email
-    if (memberId) {
-      member = await prisma.member.findUnique({
-        where: { id: memberId },
-        include: { user: true }
-      });
-      memberUser = member?.user;
-    } else if (memberEmail) {
-      const user = await prisma.user.findUnique({
-        where: { email: memberEmail },
-        include: { member: true }
-      });
-      member = user?.member;
-      memberUser = user;
-    }
-
-    if (!member) {
-      return res.status(404).json({
-        success: false,
-        message: 'Member tidak ditemukan'
-      });
-    }
-
-    // Generate friendly code and QR payload
-    const { data, hash, friendlyCode } = signPayloadWithFriendlyCode({
-      type: 'ticket',
-      ticketName: ticketName,
-      memberId: member.id,
-      ticketId: `temp-${Date.now()}`, // Will be updated after creation
-    });
-
-    // Create the ticket
-    const ticket = await prisma.ticket.create({
-      data: {
-        name: ticketName,
-        validDate: validUntil ? new Date(validUntil) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Default 30 days
-        status: 'ACTIVE',
-        qrPayloadHash: hash,
-        friendlyCode: friendlyCode,
-        memberId: member.id
-      }
-    });
-
-    // Update QR payload with actual ticket ID
-    const updatedPayload = signPayloadWithFriendlyCode({
-      type: 'ticket',
-      ticketName: ticketName,
-      memberId: member.id,
-      ticketId: ticket.id,
-    });
-
-    await prisma.ticket.update({
-      where: { id: ticket.id },
-      data: { qrPayloadHash: updatedPayload.hash }
-    });
-
-    // Send notification to member
-    try {
-      await NotificationService.createTicketClaimNotification(member.id, ticket.name, ticket.id);
-    } catch (notifError) {
-      console.error('Failed to send notification:', notifError);
-    }
-
-    // Log admin activity
-    const adminUser = await prisma.user.findUnique({ where: { id: (req as any).user!.uid } });
-    await prisma.adminActivity.create({
-      data: {
-        adminId: (req as any).user!.uid,
-        adminName: adminUser?.fullName || 'Unknown Admin',
-        adminRole: (req as any).user!.adminRole || 'SUPER_ADMIN', // Default to SUPER_ADMIN if null
-        method: req.method,
-        path: req.path,
-        status: 200,
-        ip: req.ip,
-        userAgent: req.get('User-Agent'),
-        requestBody: JSON.stringify(req.body),
-        query: JSON.stringify(req.query)
-      }
-    });
-
-    res.json({
-      success: true,
-      message: 'Tiket berhasil dibuat untuk member',
-      data: {
-        ticket,
-        memberName: member.fullName,
-        memberEmail: memberUser?.email
-      }
-    });
-  } catch (error: any) {
-    console.error('Error creating ticket for member:', error);
-    res.status(500).json({
-      success: false,
-      message: error?.message || 'Gagal membuat tiket untuk member'
-    });
-  }
-});
-
-// GET /api/admin/member-tickets - Get all member tickets for admin view
-router.get('/member-tickets', adminAuth, async (req, res) => {
-  try {
-    const tickets = await prisma.ticket.findMany({
-      include: {
-        member: {
-          include: {
-            user: {
-              select: {
-                email: true
-              }
-            }
-          }
-        }
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    });
-
-    const formattedTickets = tickets.map(ticket => ({
-      id: ticket.id,
-      name: ticket.name,
-      validDate: ticket.validDate,
-      status: ticket.status,
-      friendlyCode: ticket.friendlyCode,
-      member: {
-        name: ticket.member.fullName,
-        email: ticket.member.user?.email || 'No email'
-      },
-      createdAt: ticket.createdAt
-    }));
-
-    res.json({
-      success: true,
-      tickets: formattedTickets
-    });
-  } catch (error: any) {
-    console.error('Error getting member tickets:', error);
-    res.status(500).json({
-      success: false,
-      message: error?.message || 'Gagal mengambil daftar tiket member'
-    });
-  }
-});
-
-// Test endpoint to verify router is working
-router.get('/test', (req, res) => {
-  console.log('🔍 Admin test endpoint hit!');
-  res.json({ message: 'Admin router is working!' });
 });
 
 /* cleaned duplicate admins block at end to fix compilation */

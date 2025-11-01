@@ -1,128 +1,143 @@
 "use client";
-
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function MyTicketPage() {
-  const router = useRouter();
-  const [userTickets, setUserTickets] = useState([]);
+  const [user, setUser] = useState(null);
   const [benefits, setBenefits] = useState([]);
+  const [tickets, setTickets] = useState([]);
+  const [userTickets, setUserTickets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('benefits');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [error, setError] = useState("");
+  const [expandedPromoId, setExpandedPromoId] = useState(null);
+  const [redeemingBenefitId, setRedeemingBenefitId] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [showEVoucher, setShowEVoucher] = useState(false);
   const [currentVoucher, setCurrentVoucher] = useState(null);
-  const [redeemingBenefitId, setRedeemingBenefitId] = useState(null);
+  
+  // New state for improved UI
+  const [activeTab, setActiveTab] = useState('tickets');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-    
-    fetchUserTickets();
+    fetchUserData();
     fetchBenefits();
-  }, [router]);
+    fetchTickets();
+    fetchUserTickets();
+  }, []);
 
-  const fetchUserTickets = async () => {
+  const fetchUserData = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user-tickets`, {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        window.location.href = "/login";
+        return;
+      }
+
+      const response = await fetch("/api/auth/me", {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
       });
-      
+
       if (response.ok) {
-        const data = await response.json();
-        setUserTickets(data.data || []);
+        const userData = await response.json();
+        setUser(userData);
+      } else {
+        localStorage.removeItem("token");
+        window.location.href = "/login";
       }
     } catch (error) {
-      console.error('Error fetching user tickets:', error);
-    } finally {
-      setLoading(false);
+      console.error("Error fetching user data:", error);
+      localStorage.removeItem("token");
+      window.location.href = "/login";
     }
   };
 
   const fetchBenefits = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/member/benefits`, {
+      const token = localStorage.getItem("token");
+      const response = await fetch("/api/member/benefits", {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
       });
-      
+
       if (response.ok) {
         const data = await response.json();
-        setBenefits(data || []);
+        setBenefits(data);
       }
     } catch (error) {
-      console.error('Error fetching benefits:', error);
+      console.error("Error fetching benefits:", error);
+    }
+  };
+
+  const fetchTickets = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("/api/tickets", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setTickets(data);
+      }
+    } catch (error) {
+      console.error("Error fetching tickets:", error);
+    }
+  };
+
+  const fetchUserTickets = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("/api/user-tickets", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUserTickets(data);
+      }
+    } catch (error) {
+      console.error("Error fetching user tickets:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
   const redeemBenefit = async (benefitId) => {
-    setRedeemingBenefitId(benefitId);
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/member/benefits/${benefitId}/redeem`, {
-        method: 'POST',
+      setRedeemingBenefitId(benefitId);
+      const token = localStorage.getItem("token");
+      const response = await fetch(`/api/member/benefits/${benefitId}/redeem`, {
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
       });
-      
+
       if (response.ok) {
-        const data = await response.json();
-        // Refresh benefits and tickets
-        await fetchBenefits();
-        await fetchUserTickets();
-        alert('Benefit berhasil diredeem!');
+        const result = await response.json();
+        alert("Benefit berhasil diredeem!");
+        fetchBenefits();
+        fetchUserTickets();
       } else {
         const errorData = await response.json();
-        alert(errorData.message || 'Gagal redeem benefit');
+        alert(errorData.message || "Gagal redeem benefit");
       }
     } catch (error) {
-      console.error('Error redeeming benefit:', error);
-      alert('Terjadi kesalahan saat redeem benefit');
+      console.error("Error redeeming benefit:", error);
+      alert("Terjadi kesalahan saat redeem benefit");
     } finally {
       setRedeemingBenefitId(null);
     }
-  };
-
-  const getTicketStats = () => {
-    const total = userTickets.length;
-    const active = userTickets.filter(ticket => ticket.status === 'active').length;
-    const used = userTickets.filter(ticket => ticket.status === 'used').length;
-    const benefits = userTickets.filter(ticket => ticket.type === 'benefit').length;
-    
-    return { total, active, used, benefits };
-  };
-
-  const getFilteredTickets = () => {
-    return userTickets.filter(ticket => {
-      const matchesSearch = ticket.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           ticket.eventName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           ticket.description?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = filterStatus === 'all' || ticket.status === filterStatus;
-      const isTicketType = ticket.type !== 'voucher';
-      
-      return matchesSearch && matchesStatus && isTicketType;
-    });
   };
 
   const openPreview = (ticket) => {
@@ -133,6 +148,37 @@ export default function MyTicketPage() {
   const closePreview = () => {
     setPreviewOpen(false);
     setSelectedTicket(null);
+  };
+
+  // New filtering and statistics functions
+  const getFilteredTickets = () => {
+    let filtered = [...tickets, ...userTickets];
+    
+    if (searchTerm) {
+      filtered = filtered.filter(ticket => 
+        ticket.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ticket.eventName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ticket.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter(ticket => ticket.status === filterStatus);
+    }
+    
+    return filtered;
+  };
+
+  const getTicketStats = () => {
+    const allTickets = [...tickets, ...userTickets];
+    return {
+      total: allTickets.length,
+      active: allTickets.filter(t => t.status === 'active').length,
+      used: allTickets.filter(t => t.status === 'used').length,
+      expired: allTickets.filter(t => t.status === 'expired').length,
+      benefits: benefits.length,
+      redeemedBenefits: benefits.filter(b => b.isRedeemed).length
+    };
   };
 
   const downloadTicketPNG = async (ticket) => {
@@ -151,7 +197,7 @@ export default function MyTicketPage() {
         ctx.drawImage(img, 50, 50, 300, 300);
         
         const link = document.createElement("a");
-        link.download = `ticket-${ticket.id}.png`;
+        link.download = `ticket-${ticket.name}.png`;
         link.href = canvas.toDataURL();
         link.click();
       };
@@ -246,104 +292,98 @@ export default function MyTicketPage() {
   const stats = getTicketStats();
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gray-50">
       {/* Modern Header */}
-      <div className="bg-white shadow-sm border-b" style={{ borderColor: '#0f4d39' }}>
+      <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-3">
-              <div className="p-2 rounded-lg" style={{ backgroundColor: '#0f4d39' }}>
-                <span className="text-white text-xl">🎫</span>
+              <div className="bg-blue-100 p-2 rounded-lg">
+                <span className="text-blue-600 text-xl">🎫</span>
               </div>
               <h1 className="text-gray-900 text-xl font-bold">My Tickets</h1>
             </div>
             <div className="hidden sm:flex items-center space-x-4 text-sm text-gray-600">
               <span>Total: {stats.total}</span>
-              <span style={{ color: '#0f4d39' }}>Aktif: {stats.active}</span>
+              <span className="text-green-600">Aktif: {stats.active}</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Statistics Cards */}
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
-            <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm border">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs sm:text-sm text-gray-600 truncate">Total Tiket</p>
-                  <p className="text-lg sm:text-2xl font-bold" style={{ color: '#0f4d39' }}>{stats.total}</p>
-                </div>
-                <div className="p-1.5 sm:p-2 rounded-md sm:rounded-lg flex-shrink-0 ml-2" style={{ backgroundColor: '#0f4d39' }}>
-                  <span className="text-white text-sm sm:text-base">🎫</span>
-                </div>
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+          <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm border">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm text-gray-600 truncate">Total Tiket</p>
+                <p className="text-lg sm:text-2xl font-bold text-gray-900">{stats.total}</p>
               </div>
-            </div>
-            <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm border">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs sm:text-sm text-gray-600 truncate">Aktif</p>
-                  <p className="text-lg sm:text-2xl font-bold" style={{ color: '#0f4d39' }}>{stats.active}</p>
-                </div>
-                <div className="p-1.5 sm:p-2 rounded-md sm:rounded-lg flex-shrink-0 ml-2" style={{ backgroundColor: '#0f4d39' }}>
-                  <span className="text-white text-sm sm:text-base">✓</span>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm border">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs sm:text-sm text-gray-600 truncate">Terpakai</p>
-                  <p className="text-lg sm:text-2xl font-bold" style={{ color: '#0f4d39' }}>{stats.used}</p>
-                </div>
-                <div className="p-1.5 sm:p-2 rounded-md sm:rounded-lg flex-shrink-0 ml-2" style={{ backgroundColor: '#0f4d39' }}>
-                  <span className="text-white text-sm sm:text-base">📋</span>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm border">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs sm:text-sm text-gray-600 truncate">Benefit</p>
-                  <p className="text-lg sm:text-2xl font-bold" style={{ color: '#0f4d39' }}>{stats.benefits}</p>
-                </div>
-                <div className="p-1.5 sm:p-2 rounded-md sm:rounded-lg flex-shrink-0 ml-2" style={{ backgroundColor: '#0f4d39' }}>
-                  <span className="text-white text-sm sm:text-base">🎁</span>
-                </div>
+              <div className="bg-blue-100 p-1.5 sm:p-2 rounded-md sm:rounded-lg flex-shrink-0 ml-2">
+                <span className="text-blue-600 text-sm sm:text-base">🎫</span>
               </div>
             </div>
           </div>
+          <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm border">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm text-gray-600 truncate">Aktif</p>
+                <p className="text-lg sm:text-2xl font-bold text-green-600">{stats.active}</p>
+              </div>
+              <div className="bg-green-100 p-1.5 sm:p-2 rounded-md sm:rounded-lg flex-shrink-0 ml-2">
+                <span className="text-green-600 text-sm sm:text-base">✓</span>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm border">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm text-gray-600 truncate">Terpakai</p>
+                <p className="text-lg sm:text-2xl font-bold text-orange-600">{stats.used}</p>
+              </div>
+              <div className="bg-orange-100 p-1.5 sm:p-2 rounded-md sm:rounded-lg flex-shrink-0 ml-2">
+                <span className="text-orange-600 text-sm sm:text-base">📋</span>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm border">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm text-gray-600 truncate">Benefit</p>
+                <p className="text-lg sm:text-2xl font-bold text-purple-600">{stats.benefits}</p>
+              </div>
+              <div className="bg-purple-100 p-1.5 sm:p-2 rounded-md sm:rounded-lg flex-shrink-0 ml-2">
+                <span className="text-purple-600 text-sm sm:text-base">🎁</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Search and Filter */}
-          <div className="bg-white rounded-lg sm:rounded-xl p-4 sm:p-6 shadow-sm border mb-6 sm:mb-8">
-            <div className="flex flex-col space-y-3 sm:space-y-0 sm:flex-row sm:gap-4">
-              <div className="flex-1">
-                <input
-                  type="text"
-                  placeholder="Cari tiket atau event..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent"
-                  style={{ focusRingColor: '#0f4d39' }}
-                  onFocus={(e) => e.target.style.borderColor = '#0f4d39'}
-                  onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
-                />
-              </div>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent min-w-0 sm:min-w-[140px]"
-                style={{ focusRingColor: '#0f4d39' }}
-                onFocus={(e) => e.target.style.borderColor = '#0f4d39'}
-                onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
-              >
-                <option value="all">Semua Status</option>
-                <option value="active">Aktif</option>
-                <option value="used">Terpakai</option>
-                <option value="expired">Kadaluarsa</option>
-              </select>
+        <div className="bg-white rounded-lg sm:rounded-xl p-4 sm:p-6 shadow-sm border mb-6 sm:mb-8">
+          <div className="flex flex-col space-y-3 sm:space-y-0 sm:flex-row sm:gap-4">
+            <div className="flex-1">
+              <input
+                type="text"
+                placeholder="Cari tiket atau event..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
             </div>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-0 sm:min-w-[140px]"
+            >
+              <option value="all">Semua Status</option>
+              <option value="active">Aktif</option>
+              <option value="used">Terpakai</option>
+              <option value="expired">Kadaluarsa</option>
+            </select>
           </div>
+        </div>
 
         {/* Tabbed Navigation */}
         <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border overflow-hidden">
@@ -355,18 +395,14 @@ export default function MyTicketPage() {
                 { id: 'vouchers', label: 'Voucher Promo', icon: '🏷️', shortLabel: 'Voucher' }
               ].map((tab) => (
                 <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center justify-center space-x-1 sm:space-x-2 px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap min-w-0 flex-1 sm:flex-none ${
-                      activeTab === tab.id
-                        ? 'border-transparent text-white'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                    style={activeTab === tab.id ? { 
-                      backgroundColor: '#0f4d39',
-                      borderBottomColor: '#0f4d39'
-                    } : {}}
-                  >
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center justify-center space-x-1 sm:space-x-2 px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap min-w-0 flex-1 sm:flex-none ${
+                    activeTab === tab.id
+                      ? 'border-blue-500 text-blue-600 bg-blue-50'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
                   <span className="text-sm sm:text-base">{tab.icon}</span>
                   <span className="hidden sm:inline">{tab.label}</span>
                   <span className="sm:hidden text-xs">{tab.shortLabel}</span>
@@ -389,11 +425,11 @@ export default function MyTicketPage() {
                 ) : (
                   <div className="grid gap-4 sm:gap-6">
                     {benefits.map((benefit) => (
-                      <div key={benefit.id} className="bg-white rounded-lg sm:rounded-xl p-4 sm:p-6 border" style={{ borderColor: '#0f4d39' }}>
+                      <div key={benefit.id} className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg sm:rounded-xl p-4 sm:p-6 border border-purple-200">
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 space-y-3 sm:space-y-0">
                           <div className="flex items-start space-x-3 sm:space-x-4 flex-1">
-                            <div className="p-2 sm:p-3 rounded-lg sm:rounded-xl flex-shrink-0" style={{ backgroundColor: '#0f4d39' }}>
-                              <span className="text-white text-lg sm:text-2xl">🎁</span>
+                            <div className="bg-purple-100 p-2 sm:p-3 rounded-lg sm:rounded-xl flex-shrink-0">
+                              <span className="text-purple-600 text-lg sm:text-2xl">🎁</span>
                             </div>
                             <div className="flex-1 min-w-0">
                               <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 sm:mb-2">{benefit.title}</h3>
@@ -406,7 +442,7 @@ export default function MyTicketPage() {
                           </div>
                           <div className="flex justify-end sm:justify-start sm:ml-4 flex-shrink-0">
                             {benefit.isRedeemed ? (
-                              <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium text-white" style={{ backgroundColor: '#0f4d39' }}>
+                              <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium bg-green-100 text-green-800">
                                 ✓ Sudah Diredeem
                               </span>
                             ) : benefit.userVouchers && benefit.userVouchers.length > 0 ? (
@@ -415,35 +451,17 @@ export default function MyTicketPage() {
                                   setCurrentVoucher(benefit.userVouchers[0]);
                                   setShowEVoucher(true);
                                 }}
-                                className="inline-flex items-center px-3 sm:px-4 py-1.5 sm:py-2 text-white rounded-lg transition-all text-xs sm:text-sm font-medium"
-                                style={{ backgroundColor: '#0f4d39' }}
-                                onMouseEnter={(e) => e.target.style.backgroundColor = '#0a3d2e'}
-                                onMouseLeave={(e) => e.target.style.backgroundColor = '#0f4d39'}
+                                className="inline-flex items-center px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all text-xs sm:text-sm font-medium"
                               >
-                                👁️ 
-                                <span className="ml-1 sm:hidden">Lihat</span>
-                                <span className="ml-1 hidden sm:inline">Lihat Voucher</span>
+                                👁️ <span className="ml-1 hidden sm:inline">Lihat Voucher</span>
                               </button>
                             ) : (
                               <button
                                 onClick={() => redeemBenefit(benefit.id)}
                                 disabled={redeemingBenefitId === benefit.id}
-                                className="inline-flex items-center px-3 sm:px-4 py-1.5 sm:py-2 disabled:bg-gray-400 text-white rounded-lg transition-all text-xs sm:text-sm font-medium"
-                                style={{ backgroundColor: redeemingBenefitId === benefit.id ? '#6b7280' : '#0f4d39' }}
-                                onMouseEnter={(e) => {
-                                  if (redeemingBenefitId !== benefit.id) {
-                                    e.target.style.backgroundColor = '#0a3d2e';
-                                  }
-                                }}
-                                onMouseLeave={(e) => {
-                                  if (redeemingBenefitId !== benefit.id) {
-                                    e.target.style.backgroundColor = '#0f4d39';
-                                  }
-                                }}
+                                className="inline-flex items-center px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:bg-gray-400 text-white rounded-lg transition-all text-xs sm:text-sm font-medium"
                               >
-                                {redeemingBenefitId === benefit.id ? '⏳' : '🎯'} 
-                                <span className="ml-1 sm:hidden">{redeemingBenefitId === benefit.id ? 'Loading...' : 'Redeem'}</span>
-                                <span className="ml-1 hidden sm:inline">{redeemingBenefitId === benefit.id ? 'Redeeming...' : 'Redeem Sekarang'}</span>
+                                {redeemingBenefitId === benefit.id ? '⏳' : '🎯'} <span className="ml-1 hidden sm:inline">{redeemingBenefitId === benefit.id ? 'Redeeming...' : 'Redeem Sekarang'}</span>
                               </button>
                             )}
                           </div>
@@ -467,11 +485,11 @@ export default function MyTicketPage() {
                 ) : (
                   <div className="grid gap-4 sm:gap-6">
                     {getFilteredTickets().map((ticket) => (
-                      <div key={ticket.id} className="bg-white rounded-lg sm:rounded-xl p-4 sm:p-6 border" style={{ borderColor: '#0f4d39' }}>
+                      <div key={ticket.id} className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg sm:rounded-xl p-4 sm:p-6 border border-blue-200">
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 space-y-3 sm:space-y-0">
                           <div className="flex items-start space-x-3 sm:space-x-4 flex-1">
-                            <div className="p-2 sm:p-3 rounded-lg sm:rounded-xl flex-shrink-0" style={{ backgroundColor: '#0f4d39' }}>
-                              <span className="text-white text-lg sm:text-2xl">🎫</span>
+                            <div className="bg-blue-100 p-2 sm:p-3 rounded-lg sm:rounded-xl flex-shrink-0">
+                              <span className="text-blue-600 text-lg sm:text-2xl">🎫</span>
                             </div>
                             <div className="flex-1 min-w-0">
                               <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 sm:mb-2">{ticket.name || ticket.eventName}</h3>
@@ -484,11 +502,10 @@ export default function MyTicketPage() {
                           </div>
                           <div className="flex items-center justify-between sm:justify-end sm:flex-col sm:items-end space-x-2 sm:space-x-0 sm:space-y-2">
                             <span className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${
-                              ticket.status === 'active' ? 'text-white' :
+                              ticket.status === 'active' ? 'bg-green-100 text-green-800' :
                               ticket.status === 'used' ? 'bg-orange-100 text-orange-800' :
                               'bg-red-100 text-red-800'
-                            }`}
-                            style={ticket.status === 'active' ? { backgroundColor: '#0f4d39' } : {}}>
+                            }`}>
                               {getStatusIcon(ticket.status)} {ticket.status}
                             </span>
                           </div>
@@ -496,22 +513,14 @@ export default function MyTicketPage() {
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
                           <button
                             onClick={() => openPreview(ticket)}
-                            className="inline-flex items-center justify-center px-3 sm:px-4 py-2 text-white rounded-lg transition-all text-xs sm:text-sm font-medium"
-                            style={{ backgroundColor: '#0f4d39' }}
-                            onMouseEnter={(e) => e.target.style.backgroundColor = '#0a3d2e'}
-                            onMouseLeave={(e) => e.target.style.backgroundColor = '#0f4d39'}
+                            className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all text-xs sm:text-sm font-medium"
                           >
-                            👁️ 
-                            <span className="ml-1 sm:hidden">Detail</span>
-                            <span className="ml-1 hidden sm:inline">Lihat Detail</span>
+                            👁️ <span className="ml-1 hidden sm:inline">Lihat Detail</span>
                           </button>
                           {ticket.qrCode && (
                             <button
                               onClick={() => downloadTicketPNG(ticket)}
-                              className="inline-flex items-center justify-center px-3 sm:px-4 py-2 text-white rounded-lg transition-all text-xs sm:text-sm font-medium"
-                              style={{ backgroundColor: '#0f4d39' }}
-                              onMouseEnter={(e) => e.target.style.backgroundColor = '#0a3d2e'}
-                              onMouseLeave={(e) => e.target.style.backgroundColor = '#0f4d39'}
+                              className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all text-xs sm:text-sm font-medium"
                             >
                               <span className="hidden sm:inline">📱 Download QR</span>
                               <span className="sm:hidden">📱 QR</span>
@@ -537,11 +546,11 @@ export default function MyTicketPage() {
                 ) : (
                   <div className="grid gap-4 sm:gap-6">
                     {userTickets.filter(ticket => ticket.type === 'voucher').map((voucher) => (
-                      <div key={voucher.id} className="bg-white rounded-lg sm:rounded-xl p-4 sm:p-6 border" style={{ borderColor: '#0f4d39' }}>
+                      <div key={voucher.id} className="bg-gradient-to-r from-orange-50 to-red-50 rounded-lg sm:rounded-xl p-4 sm:p-6 border border-orange-200">
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 space-y-3 sm:space-y-0">
                           <div className="flex items-start space-x-3 sm:space-x-4 flex-1">
-                            <div className="p-2 sm:p-3 rounded-lg sm:rounded-xl flex-shrink-0" style={{ backgroundColor: '#0f4d39' }}>
-                              <span className="text-white text-lg sm:text-2xl">🏷️</span>
+                            <div className="bg-orange-100 p-2 sm:p-3 rounded-lg sm:rounded-xl flex-shrink-0">
+                              <span className="text-orange-600 text-lg sm:text-2xl">🏷️</span>
                             </div>
                             <div className="flex-1 min-w-0">
                               <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 sm:mb-2">{voucher.name}</h3>
@@ -554,11 +563,10 @@ export default function MyTicketPage() {
                           </div>
                           <div className="flex items-center justify-between sm:justify-end sm:flex-col sm:items-end space-x-2 sm:space-x-0 sm:space-y-2">
                             <span className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${
-                              voucher.status === 'active' ? 'text-white' :
+                              voucher.status === 'active' ? 'bg-green-100 text-green-800' :
                               voucher.status === 'used' ? 'bg-orange-100 text-orange-800' :
                               'bg-red-100 text-red-800'
-                            }`}
-                            style={voucher.status === 'active' ? { backgroundColor: '#0f4d39' } : {}}>
+                            }`}>
                               {getStatusIcon(voucher.status)} {voucher.status}
                             </span>
                           </div>
@@ -569,20 +577,14 @@ export default function MyTicketPage() {
                               setCurrentVoucher(voucher);
                               setShowEVoucher(true);
                             }}
-                            className="inline-flex items-center justify-center px-3 sm:px-4 py-2 text-white rounded-lg transition-all text-xs sm:text-sm font-medium"
-                            style={{ backgroundColor: '#0f4d39' }}
-                            onMouseEnter={(e) => e.target.style.backgroundColor = '#0a3d2e'}
-                            onMouseLeave={(e) => e.target.style.backgroundColor = '#0f4d39'}
+                            className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-all text-xs sm:text-sm font-medium"
                           >
                             👁️ Lihat Voucher
                           </button>
                           {voucher.qrCode && (
                             <button
                               onClick={() => downloadTicketPNG(voucher)}
-                              className="inline-flex items-center justify-center px-3 sm:px-4 py-2 text-white rounded-lg transition-all text-xs sm:text-sm font-medium"
-                              style={{ backgroundColor: '#0f4d39' }}
-                              onMouseEnter={(e) => e.target.style.backgroundColor = '#0a3d2e'}
-                              onMouseLeave={(e) => e.target.style.backgroundColor = '#0f4d39'}
+                              className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all text-xs sm:text-sm font-medium"
                             >
                               <span className="hidden sm:inline">📱 Download QR</span>
                               <span className="sm:hidden">📱 QR</span>
@@ -615,7 +617,7 @@ export default function MyTicketPage() {
               </div>
               
               <div className="text-center">
-                <div className="bg-white rounded-lg p-6 mb-4 border" style={{ borderColor: '#0f4d39' }}>
+                <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-lg p-6 mb-4 border border-orange-200">
                   <h4 className="text-xl font-bold text-gray-900 mb-2">
                     {currentVoucher.benefit?.title || currentVoucher.name}
                   </h4>
@@ -635,7 +637,7 @@ export default function MyTicketPage() {
                   
                   <div className="bg-white rounded-lg p-4 border">
                     <p className="text-sm text-gray-600 mb-1">Kode Voucher:</p>
-                    <p className="text-lg font-mono font-bold" style={{ color: '#0f4d39' }}>
+                    <p className="text-lg font-mono font-bold text-orange-600">
                       {currentVoucher.voucherCode || 'N/A'}
                     </p>
                     <p className="text-xs text-gray-500 mt-2">
@@ -648,10 +650,7 @@ export default function MyTicketPage() {
                 <div className="flex space-x-3">
                   <button
                     onClick={() => printEvoucher(currentVoucher)}
-                    className="flex-1 text-white py-2 px-4 rounded-lg font-medium"
-                    style={{ backgroundColor: '#0f4d39' }}
-                    onMouseEnter={(e) => e.target.style.backgroundColor = '#0a3d2e'}
-                    onMouseLeave={(e) => e.target.style.backgroundColor = '#0f4d39'}
+                    className="flex-1 bg-orange-600 hover:bg-orange-700 text-white py-2 px-4 rounded-lg font-medium"
                   >
                     🖨️ Print
                   </button>
@@ -684,7 +683,7 @@ export default function MyTicketPage() {
               </div>
               
               <div className="text-center">
-                <div className="bg-white rounded-lg p-6 mb-4 border" style={{ borderColor: '#0f4d39' }}>
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 mb-4 border border-blue-200">
                   <h4 className="text-xl font-bold text-gray-900 mb-2">
                     {selectedTicket.name || selectedTicket.eventName}
                   </h4>
@@ -729,10 +728,7 @@ export default function MyTicketPage() {
                   {selectedTicket.qrCode && (
                     <button
                       onClick={() => downloadTicketPNG(selectedTicket)}
-                      className="flex-1 text-white py-2 px-4 rounded-lg font-medium"
-                      style={{ backgroundColor: '#0f4d39' }}
-                      onMouseEnter={(e) => e.target.style.backgroundColor = '#0a3d2e'}
-                      onMouseLeave={(e) => e.target.style.backgroundColor = '#0f4d39'}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium"
                     >
                       📱 Download QR
                     </button>

@@ -1,0 +1,165 @@
+﻿{
+    "Results":  [
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Homepage",
+                        "ResponseTime":  305,
+                        "Details":  "Status: 200"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Registration Page",
+                        "ResponseTime":  60,
+                        "Details":  "Status: 200"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Login Page",
+                        "ResponseTime":  61,
+                        "Details":  "Status: 200"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Dashboard Page",
+                        "ResponseTime":  95,
+                        "Details":  "Status: 200"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "My Ticket Page",
+                        "ResponseTime":  96,
+                        "Details":  "Status: 200"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Exclusive Member Page",
+                        "ResponseTime":  89,
+                        "Details":  "Status: 200"
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Health Check Endpoint",
+                        "ResponseTime":  0,
+                        "Details":  "Error: The remote server returned an error: (404) Not Found."
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Register Endpoint (OPTIONS)",
+                        "ResponseTime":  28,
+                        "Details":  "Status: 204"
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Login Endpoint (OPTIONS)",
+                        "ResponseTime":  30,
+                        "Details":  "Status: 204"
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Tickets Endpoint (Unauthorized)",
+                        "ResponseTime":  0,
+                        "Details":  "Error: The remote server returned an error: (404) Not Found."
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Members Endpoint (Unauthorized)",
+                        "ResponseTime":  0,
+                        "Details":  "Error: The remote server returned an error: (404) Not Found."
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Security Header: X-Frame-Options",
+                        "ResponseTime":  0,
+                        "Details":  "Value: Not Set"
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Security Header: X-Content-Type-Options",
+                        "ResponseTime":  0,
+                        "Details":  "Value: Not Set"
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Security Header: Strict-Transport-Security",
+                        "ResponseTime":  0,
+                        "Details":  "Value: Not Set"
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Security Header: X-XSS-Protection",
+                        "ResponseTime":  0,
+                        "Details":  "Value: Not Set"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "SSL Certificate Validity",
+                        "ResponseTime":  0,
+                        "Details":  "Expires: 01/23/2026 21:29:34 (in 82 days)"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "SSL Certificate Subject",
+                        "ResponseTime":  0,
+                        "Details":  "Subject: CN=family.thelodgegroup.id"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Homepage Load Time",
+                        "ResponseTime":  138,
+                        "Details":  "Performance: Excellent"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Login Page Load Time",
+                        "ResponseTime":  61,
+                        "Details":  "Performance: Excellent"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Register Page Load Time",
+                        "ResponseTime":  63,
+                        "Details":  "Performance: Excellent"
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "API Health Response Time",
+                        "ResponseTime":  0,
+                        "Details":  "Error: The remote server returned an error: (404) Not Found."
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Database Write Test (Register)",
+                        "ResponseTime":  0,
+                        "Details":  "Error: The remote server returned an error: (404) Not Found."
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Database Read Test (Login)",
+                        "ResponseTime":  0,
+                        "Details":  "Error: The remote server returned an error: (404) Not Found."
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "CORS Configuration",
+                        "ResponseTime":  0,
+                        "Details":  "Origin: https://example.com"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "HTTP to HTTPS Redirect",
+                        "ResponseTime":  0,
+                        "Details":  "Status: 301, Location: https://family.thelodgegroup.id/"
+                    }
+                ],
+    "Timestamp":  {
+                      "value":  "\/Date(1762015829535)\/",
+                      "DisplayHint":  2,
+                      "DateTime":  "Saturday, November 1, 2025 11:50:29 PM"
+                  },
+    "BaseUrl":  "https://family.thelodgegroup.id",
+    "SuccessRate":  52,
+    "FailedTests":  12,
+    "PassedTests":  13,
+    "ApiUrl":  "https://family.thelodgegroup.id/api",
+    "TotalTests":  25
+}

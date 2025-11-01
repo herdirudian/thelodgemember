@@ -1,0 +1,211 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+        - production
+        - staging
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build backend
+        run: npm run build
+        working-directory: backend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
+
+      - name: Run backend tests (if available)
+        run: npm test --if-present
+        working-directory: backend
+
+      - name: Create deployment package
+        run: |
+          mkdir -p deployment-package
+          
+          # Copy backend files
+          cp -r backend/dist deployment-package/backend-dist
+          cp -r backend/prisma deployment-package/prisma
+          cp backend/package.json deployment-package/
+          cp backend/package-lock.json deployment-package/
+          
+          # Copy frontend build
+          cp -r frontend/.next deployment-package/frontend-build
+          cp frontend/package.json deployment-package/frontend-package.json
+          cp frontend/package-lock.json deployment-package/frontend-package-lock.json
+          
+          # Copy deployment scripts
+          cp -r scripts deployment-package/
+          
+          # Create deployment info
+          echo "DEPLOYMENT_DATE=$(date)" > deployment-package/deployment-info.txt
+          echo "COMMIT_SHA=${{ github.sha }}" >> deployment-package/deployment-info.txt
+          echo "BRANCH=${{ github.ref_name }}" >> deployment-package/deployment-info.txt
+
+      - name: Upload deployment package
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-package
+          path: deployment-package/
+          retention-days: 7
+
+  deploy-to-vps:
+    name: Deploy to VPS
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Download deployment package
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-package
+          path: deployment-package/
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Add VPS to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to VPS
+        run: |
+          # Create deployment directory with timestamp
+          DEPLOY_DIR="/var/www/lodge-family-$(date +%Y%m%d-%H%M%S)"
+          
+          # Create directory on VPS
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "sudo mkdir -p $DEPLOY_DIR"
+          
+          # Upload deployment package
+          scp -r deployment-package/* ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$DEPLOY_DIR/
+          
+          # Run deployment script on VPS
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            cd $DEPLOY_DIR
+            
+            # Install/update dependencies
+            npm install --production
+            
+            # Setup database
+            npx prisma generate
+            npx prisma migrate deploy
+            
+            # Stop existing services
+            sudo systemctl stop lodge-family-backend || true
+            sudo systemctl stop lodge-family-frontend || true
+            
+            # Update symlinks to new deployment
+            sudo rm -f /var/www/lodge-family-current
+            sudo ln -s $DEPLOY_DIR /var/www/lodge-family-current
+            
+            # Update systemd service files
+            sudo cp scripts/lodge-family-backend.service /etc/systemd/system/
+            sudo cp scripts/lodge-family-frontend.service /etc/systemd/system/
+            
+            # Reload and start services
+            sudo systemctl daemon-reload
+            sudo systemctl enable lodge-family-backend
+            sudo systemctl enable lodge-family-frontend
+            sudo systemctl start lodge-family-backend
+            sudo systemctl start lodge-family-frontend
+            
+            # Update nginx configuration
+            sudo cp scripts/nginx-lodge-family.conf /etc/nginx/sites-available/lodge-family
+            sudo ln -sf /etc/nginx/sites-available/lodge-family /etc/nginx/sites-enabled/
+            sudo nginx -t && sudo systemctl reload nginx
+            
+            # Cleanup old deployments (keep last 3)
+            cd /var/www
+            ls -dt lodge-family-* | tail -n +4 | xargs sudo rm -rf
+          EOF
+
+      - name: Health Check
+        run: |
+          # Wait for services to start
+          sleep 30
+          
+          # Check if services are running
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            echo "Checking service status..."
+            sudo systemctl status lodge-family-backend --no-pager
+            sudo systemctl status lodge-family-frontend --no-pager
+            
+            echo "Checking if application responds..."
+            curl -f http://localhost:3000/api/health || exit 1
+            curl -f http://localhost:3001/ || exit 1
+          EOF
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            echo "Deployment failed, rolling back..."
+            
+            # Find previous deployment
+            PREV_DEPLOY=$(ls -dt /var/www/lodge-family-* | sed -n '2p')
+            
+            if [ -n "$PREV_DEPLOY" ]; then
+              sudo rm -f /var/www/lodge-family-current
+              sudo ln -s $PREV_DEPLOY /var/www/lodge-family-current
+              sudo systemctl restart lodge-family-backend
+              sudo systemctl restart lodge-family-frontend
+              echo "Rolled back to: $PREV_DEPLOY"
+            else
+              echo "No previous deployment found for rollback"
+            fi
+          EOF
+
+  notify:
+    name: Notify Deployment Status
+    needs: [build-and-test, deploy-to-vps]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Notify Success
+        if: needs.deploy-to-vps.result == 'success'
+        run: |
+          echo "✅ Deployment successful!"
+          echo "Commit: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Deployed at: $(date)"
+
+      - name: Notify Failure
+        if: needs.deploy-to-vps.result == 'failure'
+        run: |
+          echo "❌ Deployment failed!"
+          echo "Commit: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Failed at: $(date)"

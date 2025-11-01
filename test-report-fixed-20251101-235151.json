@@ -1,0 +1,189 @@
+﻿{
+    "Results":  [
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Homepage (Root Redirect)",
+                        "ResponseTime":  105,
+                        "Details":  "Status: 200"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Registration Page",
+                        "ResponseTime":  52,
+                        "Details":  "Status: 200"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Login Page",
+                        "ResponseTime":  55,
+                        "Details":  "Status: 200"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Dashboard Page",
+                        "ResponseTime":  95,
+                        "Details":  "Status: 200"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "My Ticket Page",
+                        "ResponseTime":  75,
+                        "Details":  "Status: 200"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Exclusive Member Page",
+                        "ResponseTime":  86,
+                        "Details":  "Status: 200"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "API Health Check Endpoint",
+                        "ResponseTime":  39,
+                        "Details":  "Status: 200"
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Register Endpoint (OPTIONS)",
+                        "ResponseTime":  19,
+                        "Details":  "Status: 204"
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Login Endpoint (OPTIONS)",
+                        "ResponseTime":  19,
+                        "Details":  "Status: 204"
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Member Endpoint (Unauthorized)",
+                        "ResponseTime":  0,
+                        "Details":  "Status: 404 | Error: The remote server returned an error: (404) Not Found."
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Admin Endpoint (Unauthorized)",
+                        "ResponseTime":  33,
+                        "Details":  "Status: 200"
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Booking Endpoint (Unauthorized)",
+                        "ResponseTime":  0,
+                        "Details":  "Status: 404 | Error: The remote server returned an error: (404) Not Found."
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Register Validation Test",
+                        "ResponseTime":  0,
+                        "Details":  "Status: 404 | Error: The remote server returned an error: (404) Not Found."
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Login Invalid Credentials Test",
+                        "ResponseTime":  0,
+                        "Details":  "Status: 404 | Error: The remote server returned an error: (404) Not Found."
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Security Header: X-Frame-Options",
+                        "ResponseTime":  0,
+                        "Details":  "Value: Not Set"
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Security Header: X-Content-Type-Options",
+                        "ResponseTime":  0,
+                        "Details":  "Value: Not Set"
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Security Header: Referrer-Policy",
+                        "ResponseTime":  0,
+                        "Details":  "Value: Not Set"
+                    },
+                    {
+                        "Status":  "FAIL",
+                        "Name":  "Security Header: Content-Security-Policy",
+                        "ResponseTime":  0,
+                        "Details":  "Value: Not Set"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "SSL Certificate Validity",
+                        "ResponseTime":  0,
+                        "Details":  "Expires: 01/23/2026 21:29:34 (in 82 days)"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "SSL Certificate Subject",
+                        "ResponseTime":  0,
+                        "Details":  "Subject: CN=family.thelodgegroup.id"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Homepage Load Time",
+                        "ResponseTime":  75,
+                        "Details":  "Performance: Excellent"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Login Page Load Time",
+                        "ResponseTime":  56,
+                        "Details":  "Performance: Excellent"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Register Page Load Time",
+                        "ResponseTime":  57,
+                        "Details":  "Performance: Excellent"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "API Health Response Time",
+                        "ResponseTime":  45,
+                        "Details":  "Performance: Excellent"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "CORS Configuration",
+                        "ResponseTime":  0,
+                        "Details":  "Origin: https://example.com"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "HTTP to HTTPS Redirect",
+                        "ResponseTime":  0,
+                        "Details":  "Status: 301, Location: https://family.thelodgegroup.id/"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Favicon",
+                        "ResponseTime":  0,
+                        "Details":  "Status: 200"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "CSS Assets (Directory)",
+                        "ResponseTime":  0,
+                        "Details":  "Asset not found (acceptable)"
+                    },
+                    {
+                        "Status":  "PASS",
+                        "Name":  "Robots.txt",
+                        "ResponseTime":  0,
+                        "Details":  "Asset not found (acceptable)"
+                    }
+                ],
+    "Timestamp":  {
+                      "value":  "\/Date(1762015911006)\/",
+                      "DisplayHint":  2,
+                      "DateTime":  "Saturday, November 1, 2025 11:51:51 PM"
+                  },
+    "BaseUrl":  "https://family.thelodgegroup.id",
+    "SuccessRate":  62.07,
+    "FailedTests":  11,
+    "PassedTests":  18,
+    "ApiUrl":  "https://family.thelodgegroup.id",
+    "TotalTests":  29
+}

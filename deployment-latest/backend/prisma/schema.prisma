@@ -1,0 +1,564 @@
+// Prisma schema for The Lodge Family Membership System
+// Database: SQLite (for development)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  member    Member?
+  // Admin management fields
+  fullName  String?
+  isActive  Boolean  @default(true)
+  adminRole AdminRole?
+  // Password reset fields
+  resetToken String?
+  resetTokenExpiry DateTime?
+}
+
+model Member {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  fullName           String
+  phone              String
+  isPhoneVerified    Boolean  @default(false)
+  dateOfBirth        DateTime?
+  address            String?
+  membershipNumber   String?  @unique // Format pendek seperti TLG08899
+  registrationDate   DateTime @default(now())
+  isLifetime         Boolean  @default(true)
+  pointsBalance      Int      @default(0)
+  membershipCardUrl  String?
+  qrPayloadHash      String
+  tickets            Ticket[]
+  eventRegistrations EventRegistration[]
+  pointRedemptions   PointRedemption[]
+  pointAdjustments   PointAdjustment[]
+  tourismTicketBookings TourismTicketBooking[]
+  accommodationBookings AccommodationBooking[]
+  benefitRedemptions BenefitRedemption[]
+  promoRegistrations PromoRegistration[]
+  notifications      Notification[]
+  user               User     @relation(fields: [userId], references: [id])
+}
+
+model RegistrationCode {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  isActive  Boolean  @default(true)
+  expiresAt DateTime?
+  quota     Int?     // Maximum number of users that can use this code
+  usedCount Int      @default(0) // Number of times this code has been used
+  createdBy String
+  createdAt DateTime @default(now())
+}
+
+model Ticket {
+  id            String   @id @default(uuid())
+  memberId      String
+  name          String
+  validDate     DateTime
+  status        TicketStatus @default(ACTIVE)
+  qrPayloadHash String
+  friendlyCode  String?
+  createdAt     DateTime @default(now())
+  redeemedAt    DateTime?
+  promoId       String?
+  promo         Promo?   @relation(fields: [promoId], references: [id])
+  member        Member   @relation(fields: [memberId], references: [id])
+}
+
+model Event {
+  id            String   @id @default(uuid())
+  title         String
+  description   String
+  eventDate     DateTime
+  quota         Int
+  imageUrl      String?
+  location      String?
+  terms         String?
+  createdAt     DateTime @default(now())
+  registrations EventRegistration[]
+  promos        Promo[]
+}
+
+model EventRegistration {
+  id            String   @id @default(uuid())
+  eventId       String
+  memberId      String
+  status        RegistrationStatus @default(REGISTERED)
+  qrPayloadHash String
+  friendlyCode  String?
+  createdAt     DateTime @default(now())
+  redeemedAt    DateTime?
+  event         Event    @relation(fields: [eventId], references: [id])
+  member        Member   @relation(fields: [memberId], references: [id])
+}
+
+model PointRedemption {
+  id            String   @id @default(uuid())
+  memberId      String
+  pointsUsed    Int
+  rewardName    String
+  status        RedemptionStatus @default(ACTIVE)
+  qrPayloadHash String
+  friendlyCode  String?
+  createdAt     DateTime @default(now())
+  redeemedAt    DateTime?
+  promoId       String?
+  promo         Promo?   @relation(fields: [promoId], references: [id])
+  member        Member   @relation(fields: [memberId], references: [id])
+}
+
+model PointAdjustment {
+  id              String          @id @default(uuid())
+  memberId        String
+  adminId         String
+  adminName       String
+  type            AdjustmentType
+  points          Int
+  reason          String?
+  previousBalance Int?
+  newBalance      Int?
+  createdAt       DateTime        @default(now())
+  member          Member          @relation(fields: [memberId], references: [id])
+}
+
+model Announcement {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  imageUrl    String?
+  postedAt    DateTime @default(now())
+  createdBy   String
+}
+
+model Benefit {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  validFrom   DateTime @default(now())
+  validUntil  DateTime?
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  redemptions BenefitRedemption[]
+}
+
+model Promo {
+  id             String    @id @default(uuid())
+  title          String
+  description    String
+  startDate      DateTime
+  endDate        DateTime
+  imageUrl       String?
+  type           PromoType @default(INFORMATION)
+  pointsRequired Int?
+  maxRedeem      Int?
+  quota          Int?
+  // Optional link to Event for promos of type EVENT or EXCLUSIVE_MEMBER
+  eventId        String?
+  event          Event?    @relation(fields: [eventId], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  // Controls for showing buttons on member UI
+  showMoreButton Boolean   @default(true)
+  showJoinButton Boolean   @default(true)
+  // add back relation from PointRedemption
+  pointRedemptions PointRedemption[]
+  tickets        Ticket[]
+  promoRegistrations PromoRegistration[]
+}
+model SliderImage {
+  id          String   @id @default(uuid())
+  imageUrl    String
+  title       String?
+  description String?
+  linkUrl     String?
+  position    Int?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  createdBy   String?
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+// New enum for granular admin roles
+enum AdminRole {
+  CASHIER
+  MODERATOR
+  OWNER
+  SUPER_ADMIN
+}
+
+enum TicketStatus {
+  ACTIVE
+  REDEEMED
+}
+
+enum RegistrationStatus {
+  REGISTERED
+  REDEEMED
+}
+
+enum RedemptionStatus {
+  ACTIVE
+  REDEEMED
+}
+
+enum AdjustmentType {
+  ADD
+  SUBTRACT
+}
+
+model RedeemHistory {
+  id           String      @id @default(uuid())
+  memberId     String
+  memberName   String
+  voucherType  VoucherType
+  voucherId    String
+  voucherLabel String?
+  redeemedAt   DateTime    @default(now())
+  adminId      String
+  adminName    String
+  proofUrl     String?
+  createdAt    DateTime    @default(now())
+}
+
+enum VoucherType {
+  TICKET
+  POINTS
+  EVENT
+  TOURISM_TICKET
+  BENEFIT
+}
+
+enum PromoType {
+  INFORMATION
+  REDEEM_POINTS
+  EXCLUSIVE_MEMBER
+  FREE_BENEFIT_NEW_REG
+  EVENT
+}
+
+model AdminActivity {
+  id          String     @id @default(uuid())
+  adminId     String
+  adminName   String?
+  adminRole   AdminRole?
+  method      String
+  path        String
+  status      Int
+  ip          String?
+  userAgent   String?
+  requestBody String?
+  query       String?
+  createdAt   DateTime   @default(now())
+}
+
+model TourismTicket {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  validDate   DateTime
+  expiryDate  DateTime
+  allotment   Int
+  price       Float
+  discount    Float    @default(0)
+  finalPrice  Float
+  imageUrl    String?
+  category    String
+  location    String
+  duration    String
+  includes    String
+  terms       String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  bookings    TourismTicketBooking[]
+}
+
+model Accommodation {
+  id           String   @id @default(uuid())
+  name         String
+  description  String
+  type         String
+  location     String
+  pricePerNight Float
+  discount     Float    @default(0)
+  maxGuests    Int
+  totalRooms   Int
+  amenities    String
+  policies     String
+  imageUrl     String?
+  rating       Float    @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  bookings     AccommodationBooking[]
+}
+
+// Payment and Booking Models
+model TourismTicketBooking {
+  id              String        @id @default(uuid())
+  ticketId        String
+  memberId        String?       // Optional for guest bookings
+  customerName    String
+  customerEmail   String
+  customerPhone   String
+  quantity        Int
+  totalAmount     Float
+  bookingDate     DateTime
+  visitDate       DateTime
+  status          BookingStatus @default(PENDING)
+  paymentId       String?       @unique
+  notes           String?
+  qrPayloadHash   String?       // QR code payload hash for redemption
+  friendlyCode    String?       // User-friendly voucher code
+  redeemedAt      DateTime?     // When the ticket was redeemed
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  ticket          TourismTicket @relation(fields: [ticketId], references: [id])
+  member          Member?       @relation(fields: [memberId], references: [id])
+  payment         Payment?      @relation(fields: [paymentId], references: [id])
+}
+
+model AccommodationBooking {
+  id              String        @id @default(uuid())
+  accommodationId String
+  memberId        String?       // Optional for guest bookings
+  customerName    String
+  customerEmail   String
+  customerPhone   String
+  checkInDate     DateTime
+  checkOutDate    DateTime
+  guests          Int
+  rooms           Int
+  totalAmount     Float
+  status          BookingStatus @default(PENDING)
+  paymentId       String?       @unique
+  specialRequests String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  accommodation   Accommodation @relation(fields: [accommodationId], references: [id])
+  member          Member?       @relation(fields: [memberId], references: [id])
+  payment         Payment?      @relation(fields: [paymentId], references: [id])
+}
+
+model Payment {
+  id                    String        @id @default(uuid())
+  xenditInvoiceId       String?       @unique
+  xenditPaymentId       String?       @unique
+  amount                Float
+  currency              String        @default("IDR")
+  status                PaymentStatus @default(PENDING)
+  paymentMethod         String?
+  paymentChannel        String?
+  description           String?
+  customerName          String
+  customerEmail         String
+  customerPhone         String?
+  externalId            String        @unique
+  invoiceUrl            String?
+  paidAt                DateTime?
+  expiredAt             DateTime?
+  failureCode           String?
+  failureMessage        String?
+  webhookData           String?       // JSON string for storing webhook payload
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  
+  tourismTicketBooking  TourismTicketBooking?
+  accommodationBooking  AccommodationBooking?
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  PAID
+  CANCELLED
+  COMPLETED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  EXPIRED
+  FAILED
+  CANCELLED
+}
+
+model BenefitRedemption {
+  id            String   @id @default(uuid())
+  memberId      String
+  benefitId     String
+  voucherCode   String   @unique
+  qrCode        String   // QR code data/URL
+  isUsed        Boolean  @default(false)
+  usedAt        DateTime?
+  emailSent     Boolean  @default(false)
+  emailSentAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  member        Member   @relation(fields: [memberId], references: [id])
+  benefit       Benefit  @relation(fields: [benefitId], references: [id])
+  
+  @@index([memberId])
+  @@index([benefitId])
+  @@index([voucherCode])
+}
+
+// Notification System Models
+model Notification {
+  id          String           @id @default(uuid())
+  memberId    String
+  title       String
+  message     String
+  type        NotificationType
+  isRead      Boolean          @default(false)
+  readAt      DateTime?
+  // Optional reference to related entities
+  relatedId   String?          // ID of related entity (promo, ticket, etc.)
+  relatedType String?          // Type of related entity
+  imageUrl    String?          // Optional image for the notification
+  actionUrl   String?          // Optional URL for action button
+  actionText  String?          // Text for action button
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  
+  member      Member           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  
+  @@index([memberId])
+  @@index([isRead])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model AdminMessage {
+  id          String   @id @default(uuid())
+  title       String
+  message     String
+  imageUrl    String?
+  // Target audience
+  targetType  MessageTargetType @default(ALL_MEMBERS)
+  targetIds   String?  // JSON array of specific member IDs if targetType is SPECIFIC_MEMBERS
+  // Scheduling
+  isScheduled Boolean  @default(false)
+  scheduledAt DateTime?
+  // Status
+  isActive    Boolean  @default(true)
+  isSent      Boolean  @default(false)
+  sentAt      DateTime?
+  // Admin info
+  createdBy   String
+  createdByName String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([targetType])
+  @@index([isActive])
+  @@index([isSent])
+  @@index([scheduledAt])
+}
+
+enum NotificationType {
+  ADMIN_MESSAGE      // Pesan dari admin
+  NEW_PROMO         // Promo/postingan baru
+  TICKET_CLAIMED    // Tiket diklaim
+  POINTS_EARNED     // Poin bertambah
+  POINTS_REDEEMED   // Poin ditukar
+  EVENT_REMINDER    // Pengingat event
+  MEMBERSHIP_UPDATE // Update membership
+  SYSTEM_UPDATE     // Update sistem
+}
+
+enum MessageTargetType {
+  ALL_MEMBERS       // Semua member
+  SPECIFIC_MEMBERS  // Member tertentu
+  ACTIVE_MEMBERS    // Member aktif saja
+}
+
+model Settings {
+  id                String   @id @default(uuid())
+  // General
+  appName           String   @default("The Lodge Family")
+  defaultLocale     String   @default("id-ID")
+  timeZone          String   @default("Asia/Jakarta")
+  // Branding
+  primaryColor      String   @default("#0F4D39")
+  darkMode          Boolean  @default(true)
+  logoUrl           String?
+  // Security
+  require2FA        Boolean  @default(false)
+  sessionTimeout    Int      @default(60)
+  allowDirectLogin  Boolean  @default(true)
+  // Email
+  fromName          String?
+  fromEmail         String?
+  emailProvider     String   @default("smtp")
+  // Integrations
+  cloudinaryEnabled Boolean  @default(false)
+  cloudinaryFolder  String?
+  webhookUrl        String?
+  // Payment Gateway (Xendit)
+  xenditSecretKey   String?
+  xenditPublicKey   String?
+  xenditWebhookToken String?
+  xenditEnvironment String   @default("test") // "test" or "live"
+  // Maintenance
+  maintenanceMode   Boolean  @default(false)
+  announcement      String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model PromoRegistration {
+  id            String   @id @default(uuid())
+  memberId      String
+  promoId       String
+  registrationId String  @unique // Unique registration ID for QR code
+  voucherCode   String   @unique // Friendly voucher code
+  qrCode        String   // QR code data URL
+  status        PromoVoucherStatus @default(ACTIVE)
+  isUsed        Boolean  @default(false)
+  usedAt        DateTime?
+  emailSent     Boolean  @default(false)
+  emailSentAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  member        Member   @relation(fields: [memberId], references: [id])
+  promo         Promo    @relation(fields: [promoId], references: [id])
+  
+  @@index([memberId])
+  @@index([promoId])
+  @@index([voucherCode])
+  @@index([registrationId])
+}
+
+enum PromoVoucherStatus {
+  ACTIVE
+  USED
+  EXPIRED
+}
