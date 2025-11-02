@@ -113,6 +113,17 @@ app.get('/api', (req, res) => {
   res.json({ status: 'ok', name: 'The Lodge Family Membership API', path: '/api' });
 });
 
+// Health check endpoint untuk Actions dan monitoring
+app.get('/api/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'backend',
+    env: process.env.NODE_ENV || 'development',
+    port: process.env.PORT || 5001,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Simple test endpoint to verify Express is working
 app.get('/api/simple-test', (req, res) => {
   console.log('🔥🔥🔥 Simple test endpoint hit! 🔥🔥🔥');
