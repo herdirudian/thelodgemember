@@ -108,6 +108,7 @@ jobs:
 
       - name: Add VPS to known hosts
         run: |
+          mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy to VPS
@@ -124,6 +125,18 @@ jobs:
           # Run deployment steps on VPS (expand DEPLOY_DIR locally into remote script)
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
             set -e
+            
+            # Ensure Node.js 20 and npm are installed (Ubuntu/Debian)
+            if ! command -v node >/dev/null 2>&1; then
+              echo "Node.js not found, installing Node.js 20 via NodeSource..."
+              if command -v apt-get >/dev/null 2>&1; then
+                curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+                sudo apt-get update -y
+                sudo apt-get install -y nodejs
+              else
+                echo "apt-get not available; please install Node.js 20 manually" && exit 1
+              fi
+            fi
             cd $DEPLOY_DIR
 
             # Install backend deps and run prisma
@@ -223,8 +236,8 @@ EOF
 
       - name: Health Check
         run: |
-          # Wait for services to start
-          sleep 60
+          # Initial wait for services to start
+          sleep 20
           
           # Check if services are running
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
@@ -233,8 +246,31 @@ EOF
             sudo systemctl status lodge-family-frontend --no-pager
             
             echo "Checking if application responds..."
-            curl -f http://localhost:5001/api/health || exit 1
-            curl -f http://localhost:3003/ || exit 1
+            # Retry backend health up to 12 times (2 minutes)
+            for i in $(seq 1 12); do
+              if curl -fsS http://localhost:5001/api/health; then
+                echo "Backend healthy"
+                break
+              fi
+              echo "Backend not ready yet, retry $i/12..."
+              sleep 10
+              if [ "$i" -eq 12 ]; then
+                echo "Backend failed to become healthy in time" && exit 1
+              fi
+            done
+
+            # Retry frontend health up to 12 times (2 minutes)
+            for i in $(seq 1 12); do
+              if curl -fsS http://localhost:3003/; then
+                echo "Frontend healthy"
+                break
+              fi
+              echo "Frontend not ready yet, retry $i/12..."
+              sleep 10
+              if [ "$i" -eq 12 ]; then
+                echo "Frontend failed to become healthy in time" && exit 1
+              fi
+            done
           EOF
 
       - name: Rollback on failure
