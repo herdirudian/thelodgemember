@@ -95,6 +95,24 @@ jobs:
     if: github.ref == 'refs/heads/main'
     
     steps:
+      - name: Validate required secrets
+        run: |
+          VPS_HOST="${{ secrets.VPS_HOST }}"
+          VPS_USER="${{ secrets.VPS_USER }}"
+          VPS_SSH_KEY_PRESENT="${{ secrets.VPS_SSH_KEY }}"
+          DATABASE_URL_PRESENT="${{ secrets.DATABASE_URL }}"
+          MISSING=""
+          [ -z "$VPS_HOST" ] && MISSING="VPS_HOST $MISSING"
+          [ -z "$VPS_USER" ] && MISSING="VPS_USER $MISSING"
+          [ -z "$VPS_SSH_KEY_PRESENT" ] && MISSING="VPS_SSH_KEY $MISSING"
+          [ -z "$DATABASE_URL_PRESENT" ] && MISSING="DATABASE_URL $MISSING"
+          if [ -n "$MISSING" ]; then
+            echo "Missing required secrets: $MISSING"
+            exit 1
+          else
+            echo "All required secrets are present."
+          fi
+
       - name: Download deployment package
         uses: actions/download-artifact@v4
         with:
@@ -138,6 +156,12 @@ jobs:
               fi
             fi
             cd $DEPLOY_DIR
+
+            # Debug Node.js environment
+            echo "Node version: $(node -v || echo not found)"
+            echo "NPM version: $(npm -v || echo not found)"
+            echo "Node path: $(which node || echo not found)"
+            echo "NPM path: $(which npm || echo not found)"
 
             # Export environment from GitHub Secrets for pre-service commands (Prisma, npm)
             export NODE_ENV=production
