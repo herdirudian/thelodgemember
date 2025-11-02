@@ -1784,7 +1784,7 @@ router.delete('/events/:id', adminAuth, async (req, res) => {
 
 // QR Redeem Center
 router.post('/redeem', adminAuth, async (req, res) => {
-  const { data, hash, friendlyCode } = req.body as { data?: string; hash?: string; friendlyCode?: string };
+  const { data, hash, friendlyCode, type, memberId, ticketId, redemptionId, registrationId, eventId, bookingId, benefitRedemptionId } = req.body as { data?: string; hash?: string; friendlyCode?: string; type?: string; memberId?: string; ticketId?: string; redemptionId?: string; registrationId?: string; eventId?: string; bookingId?: string; benefitRedemptionId?: string };
   
   // Support both traditional QR code and friendly voucher code
   let payload: any = null;
@@ -1823,11 +1823,27 @@ router.post('/redeem', adminAuth, async (req, res) => {
     if (!payload) {
       return res.status(400).json({ message: 'Invalid voucher code' });
     }
-  } else {
+  } else if (data && hash) {
     // Traditional QR code verification
-    if (!data || !hash) return res.status(400).json({ message: 'Missing data' });
     payload = verifyPayload(data, hash);
     if (!payload) return res.status(400).json({ message: 'Invalid QR' });
+  } else if (type) {
+    // Direct payload support from Admin UI
+    if (type === 'ticket' && memberId && ticketId) {
+      payload = { type: 'ticket', memberId, ticketId };
+    } else if (type === 'points' && memberId && redemptionId) {
+      payload = { type: 'points', memberId, redemptionId };
+    } else if (type === 'event' && memberId && registrationId && eventId) {
+      payload = { type: 'event', memberId, registrationId, eventId };
+    } else if (type === 'tourism_ticket' && bookingId) {
+      payload = { type: 'tourism_ticket', bookingId, memberId };
+    } else if (type === 'benefit' && memberId && (benefitRedemptionId || redemptionId)) {
+      payload = { type: 'benefit', memberId, redemptionId: (benefitRedemptionId || redemptionId) };
+    } else {
+      return res.status(400).json({ message: 'Invalid redeem payload' });
+    }
+  } else {
+    return res.status(400).json({ message: 'Missing data' });
   }
 
   try {
@@ -1866,6 +1882,62 @@ router.post('/redeem', adminAuth, async (req, res) => {
       const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
       await prisma.redeemHistory.create({ data: { memberId, memberName, voucherType, voucherId, voucherLabel, redeemedAt, adminId, adminName, proofUrl } });
       return res.json({ success: true, ticket: updated, proofUrl });
+    }
+    if (payload.type === 'tourism_ticket') {
+      const tb = await prisma.tourismTicketBooking.findUnique({ where: { id: payload.bookingId } });
+      if (!tb) return res.status(404).json({ message: 'Tourism booking not found' });
+      if (tb.redeemedAt) return res.status(400).json({ message: 'Ticket already redeemed' });
+      if (tb.status !== 'PAID') return res.status(400).json({ message: 'Ticket not paid' });
+      const updated = await prisma.tourismTicketBooking.update({ where: { id: tb.id }, data: { redeemedAt } });
+      const member = tb.memberId ? await prisma.member.findUnique({ where: { id: tb.memberId } }) : null;
+      memberId = tb.memberId || memberId || '';
+      memberName = member?.fullName || tb.customerName || '';
+      voucherType = 'TOURISM_TICKET' as any;
+      voucherId = tb.id;
+      const ticketDef = await prisma.tourismTicket.findUnique({ where: { id: tb.ticketId } });
+      voucherLabel = ticketDef?.name;
+      const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
+      const qrUrl = data && hash ? `${baseUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}` : `${baseUrl}/api/verify?friendlyCode=${tb.friendlyCode || tb.id}`;
+      const qrDataURL = await generateQRDataURL(qrUrl);
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'redeem-proofs');
+      try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
+      const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
+      const outputPath = path.join(uploadsDir, filename);
+      await createRedeemProofPDF({ outputPath, memberName, voucherType: 'Tiket Wisata', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
+      const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
+      await prisma.redeemHistory.create({ data: { memberId, memberName, voucherType, voucherId, voucherLabel, redeemedAt, adminId, adminName, proofUrl } });
+      return res.json({ success: true, booking: updated, proofUrl });
+    }
+    if (payload.type === 'benefit') {
+      const br = await prisma.benefitRedemption.findUnique({ where: { id: payload.redemptionId } });
+      if (!br || br.memberId !== payload.memberId) return res.status(404).json({ message: 'Benefit redemption not found' });
+      if (br.isUsed) return res.status(400).json({ message: 'Already redeemed' });
+      const updated = await prisma.benefitRedemption.update({ where: { id: br.id }, data: { isUsed: true, usedAt: redeemedAt } });
+      const member = await prisma.member.findUnique({ where: { id: br.memberId } });
+      const benefit = await prisma.benefit.findUnique({ where: { id: br.benefitId } });
+      memberName = member?.fullName || '';
+      voucherType = 'BENEFIT' as any;
+      voucherId = br.id;
+      voucherLabel = benefit?.title;
+      const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
+      const qrUrl = data && hash ? `${baseUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}` : `${baseUrl}/api/verify?friendlyCode=${br.voucherCode}`;
+      const qrDataURL = await generateQRDataURL(qrUrl);
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'redeem-proofs');
+      try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
+      const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
+      const outputPath = path.join(uploadsDir, filename);
+      await createRedeemProofPDF({ outputPath, memberName, voucherType: 'Benefit Voucher', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
+      const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
+      await prisma.redeemHistory.create({ data: { memberId, memberName, voucherType, voucherId, voucherLabel, redeemedAt, adminId, adminName, proofUrl } });
+      // Create notification for benefit redemption (non-blocking)
+      try {
+        const { NotificationService } = await import('../utils/notificationService');
+        await NotificationService.createBenefitRedemptionNotification(memberId, voucherLabel || 'Benefit Voucher', voucherId);
+      } catch (notifError) {
+        console.error('Error creating benefit redemption notification:', notifError);
+        // Do not fail the redemption if notification fails
+      }
+      return res.json({ success: true, benefitRedemption: updated, proofUrl });
     }
     if (payload.type === 'points') {
       const pr = await prisma.pointRedemption.findUnique({ where: { id: payload.redemptionId } });
@@ -4277,7 +4349,9 @@ router.get('/tickets', adminAuth, async (req, res) => {
 // GET /api/admin/point-redemptions - Get point redemptions for redeem voucher
 router.get('/point-redemptions', adminAuth, async (req, res) => {
   try {
+    const { memberId } = req.query as { memberId?: string };
     const redemptions = await prisma.pointRedemption.findMany({
+      where: memberId ? { memberId: String(memberId) } : undefined,
       include: {
         member: {
           include: {
@@ -4304,7 +4378,9 @@ router.get('/point-redemptions', adminAuth, async (req, res) => {
 // GET /api/admin/event-registrations - Get event registrations for redeem voucher
 router.get('/event-registrations', adminAuth, async (req, res) => {
   try {
+    const { memberId } = req.query as { memberId?: string };
     const registrations = await prisma.eventRegistration.findMany({
+      where: memberId ? { memberId: String(memberId) } : undefined,
       include: {
         member: {
           select: {
@@ -4332,6 +4408,56 @@ router.get('/event-registrations', adminAuth, async (req, res) => {
   } catch (error: any) {
     console.error('Get event registrations error:', error);
     res.status(500).json({ message: error?.message || 'Failed to get event registrations' });
+  }
+});
+
+// GET /api/admin/benefit-redemptions - list benefit voucher redemptions
+router.get('/benefit-redemptions', adminAuth, async (req, res) => {
+  try {
+    const { memberId } = req.query as { memberId?: string };
+    const list = await prisma.benefitRedemption.findMany({
+      where: memberId ? { memberId: String(memberId) } : undefined,
+      include: {
+        member: {
+          include: {
+            user: {
+              select: { id: true, email: true, fullName: true }
+            }
+          }
+        },
+        benefit: true,
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(list);
+  } catch (error: any) {
+    console.error('Get benefit redemptions error:', error);
+    res.status(500).json({ message: error?.message || 'Failed to get benefit redemptions' });
+  }
+});
+
+// GET /api/admin/tourism-bookings - list tourism ticket bookings (for redeem)
+router.get('/tourism-bookings', adminAuth, async (req, res) => {
+  try {
+    const { memberId } = req.query as { memberId?: string };
+    const list = await prisma.tourismTicketBooking.findMany({
+      where: memberId ? { memberId: String(memberId) } : undefined,
+      include: {
+        member: {
+          include: {
+            user: {
+              select: { id: true, email: true, fullName: true }
+            }
+          }
+        },
+        ticket: true,
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(list);
+  } catch (error: any) {
+    console.error('Get tourism bookings error:', error);
+    res.status(500).json({ message: error?.message || 'Failed to get tourism bookings' });
   }
 });
 

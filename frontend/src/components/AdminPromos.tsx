@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 
-type PromoType = "REDEEM_POINTS" | "EVENT" | "EXCLUSIVE_MEMBER" | "FREE_BENEFIT_NEW_REG";
+type PromoType = "REDEEM_POINTS" | "EVENT" | "EXCLUSIVE_MEMBER" | "FREE_BENEFIT_NEW_REG" | "BIRTHDAY_GIFT";
 
 interface PromoItem {
   id: string;
@@ -283,6 +283,7 @@ export default function AdminPromos() {
       case "EVENT": return "Event";
       case "EXCLUSIVE_MEMBER": return "Member Eksklusif";
       case "FREE_BENEFIT_NEW_REG": return "Member Baru";
+      case "BIRTHDAY_GIFT": return "Hadiah Ulang Tahun";
       default: return type;
     }
   };
@@ -293,6 +294,7 @@ export default function AdminPromos() {
       case "EVENT": return "bg-green-100 text-green-800";
       case "EXCLUSIVE_MEMBER": return "bg-purple-100 text-purple-800";
       case "FREE_BENEFIT_NEW_REG": return "bg-orange-100 text-orange-800";
+      case "BIRTHDAY_GIFT": return "bg-pink-100 text-pink-800";
       default: return "bg-gray-100 text-gray-800";
     }
   };
@@ -335,6 +337,7 @@ export default function AdminPromos() {
             <option value="EVENT">Event</option>
             <option value="EXCLUSIVE_MEMBER">Member Eksklusif</option>
             <option value="FREE_BENEFIT_NEW_REG">Member Baru</option>
+            <option value="BIRTHDAY_GIFT">Hadiah Ulang Tahun</option>
           </select>
         </div>
         <div>
@@ -425,6 +428,11 @@ export default function AdminPromos() {
                         <div>
                           <div>Kuota: {item.quota || "∞"}</div>
                           {item.eventId && <div>Event ID: {item.eventId}</div>}
+                        </div>
+                      )}
+                      {item.type === "BIRTHDAY_GIFT" && (
+                        <div>
+                          <div>Kuota: {item.quota || "∞"}</div>
                         </div>
                       )}
                       {item.type === "FREE_BENEFIT_NEW_REG" && (
@@ -536,6 +544,7 @@ export default function AdminPromos() {
                     <option value="EVENT">Event</option>
                     <option value="EXCLUSIVE_MEMBER">Member Eksklusif</option>
                     <option value="FREE_BENEFIT_NEW_REG">Member Baru</option>
+                    <option value="BIRTHDAY_GIFT">Hadiah Ulang Tahun</option>
                   </select>
                 </div>
               </div>
@@ -617,6 +626,21 @@ export default function AdminPromos() {
                       onChange={(e) => setEventId(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                       placeholder="ID event terkait"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {type === "BIRTHDAY_GIFT" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text sm font-medium text-gray-700 mb-1">Kuota</label>
+                    <input
+                      type="number"
+                      value={quota}
+                      onChange={(e) => setQuota(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      placeholder="Kosongkan untuk unlimited"
                     />
                   </div>
                 </div>
@@ -731,6 +755,7 @@ export default function AdminPromos() {
                     <option value="EVENT">Event</option>
                     <option value="EXCLUSIVE_MEMBER">Member Eksklusif</option>
                     <option value="FREE_BENEFIT_NEW_REG">Member Baru</option>
+                    <option value="BIRTHDAY_GIFT">Hadiah Ulang Tahun</option>
                   </select>
                 </div>
               </div>
@@ -832,6 +857,21 @@ export default function AdminPromos() {
                       onChange={(e) => setEditMaxRedeem(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                       placeholder="1"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {editType === "BIRTHDAY_GIFT" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Kuota</label>
+                    <input
+                      type="number"
+                      value={editQuota}
+                      onChange={(e) => setEditQuota(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      placeholder="Kosongkan untuk unlimited"
                     />
                   </div>
                 </div>

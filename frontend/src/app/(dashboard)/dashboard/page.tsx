@@ -268,6 +268,32 @@ export default function DashboardPage() {
     } catch { return null; }
   }
 
+  // Helper: tanggal ulang tahun berikutnya untuk member
+  function getNextBirthday(dobStr?: string): Date | null {
+    if (!dobStr) return null;
+    const dob = new Date(dobStr);
+    if (isNaN(dob.getTime())) return null;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const next = new Date(currentYear, dob.getMonth(), dob.getDate());
+    // jika sudah lewat tahun ini, gunakan tahun depan
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (next < todayStart) {
+      next.setFullYear(currentYear + 1);
+    }
+    return next;
+  }
+
+  // Helper: hitung selisih hari dari hari ini ke target
+  function daysUntil(date: Date | null): number {
+    if (!date) return Infinity;
+    const now = new Date();
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    return Math.floor((target - startOfToday) / msPerDay);
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <div className="mx-auto max-w-6xl px-4 py-6 space-y-6">
@@ -613,7 +639,22 @@ export default function DashboardPage() {
             <div className="py-6 text-sm text-gray-600">Belum ada promo aktif saat ini.</div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {promos.map((p) => {
+              {(
+                // Filter: tampilkan BIRTHDAY_GIFT hanya jika ulang tahun akan datang (≤7 hari),
+                // promo aktif sekarang, dan (jika ada) tanggal ulang tahun berada dalam periode promo
+                promos.filter((p: any) => {
+                  if (p.type === 'BIRTHDAY_GIFT') {
+                    const nextBday = getNextBirthday(me?.member?.dateOfBirth);
+                    const d = daysUntil(nextBday);
+                    const start = p.startDate ? new Date(p.startDate) : null;
+                    const end = p.endDate ? new Date(p.endDate) : null;
+                    const withinPeriod = nextBday && start && end ? (nextBday >= start && nextBday <= end) : true;
+                    const promoActiveNow = (!start || start <= new Date()) && (!end || end >= new Date());
+                    return d >= 0 && d <= 7 && promoActiveNow && withinPeriod;
+                  }
+                  return true;
+                })
+              ).map((p) => {
                 const start = p.startDate ? new Date(p.startDate) : null;
                 const end = p.endDate ? new Date(p.endDate) : null;
                 const dl = daysLeft(p.endDate);

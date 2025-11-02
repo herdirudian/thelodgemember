@@ -16,7 +16,7 @@ export default function ExclusiveMemberPage() {
   const [voucherPreview, setVoucherPreview] = useState<string | null>(null);
   const [voucherGenerating, setVoucherGenerating] = useState(false);
   const [promos, setPromos] = useState<any[]>([]);
-  const [promoFilter, setPromoFilter] = useState<'ALL' | 'EVENT' | 'EXCLUSIVE_MEMBER'>('ALL');
+  const [promoFilter, setPromoFilter] = useState<'ALL' | 'EVENT' | 'EXCLUSIVE_MEMBER' | 'BIRTHDAY_GIFT'>('ALL');
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   // Toast notifications
@@ -107,7 +107,45 @@ export default function ExclusiveMemberPage() {
   })();
   const pointsBalance = me?.member?.pointsBalance ?? 0;
   const activeVouchers = me?.member?.activeVouchers ?? 0;
-  const memberPromos = promos.filter((p: any) => p.type === 'EVENT' || p.type === 'EXCLUSIVE_MEMBER');
+  // Helper: hitung tanggal ulang tahun berikutnya dari member
+  function getNextBirthday(dobStr?: string): Date | null {
+    if (!dobStr) return null;
+    const dob = new Date(dobStr);
+    if (isNaN(dob.getTime())) return null;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const next = new Date(currentYear, dob.getMonth(), dob.getDate());
+    // jika sudah lewat di tahun ini, pakai tahun depan
+    if (next < new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
+      next.setFullYear(currentYear + 1);
+    }
+    return next;
+  }
+
+  // Helper: selisih hari dari sekarang ke target (>=0 jika di masa depan)
+  function daysUntil(date: Date | null): number {
+    if (!date) return Infinity;
+    const now = new Date();
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    return Math.floor((target - startOfToday) / msPerDay);
+  }
+
+  // Tampilkan BIRTHDAY_GIFT hanya untuk member yang ulang tahunnya akan datang (≤7 hari) dan berada dalam periode promo
+  const memberPromos = promos.filter((p: any) => {
+    if (p.type === 'BIRTHDAY_GIFT') {
+      const nextBday = getNextBirthday(me?.member?.dateOfBirth);
+      const d = daysUntil(nextBday);
+      const start = p.startDate ? new Date(p.startDate) : null;
+      const end = p.endDate ? new Date(p.endDate) : null;
+      const withinPeriod = nextBday && start && end ? (nextBday >= start && nextBday <= end) : true;
+      const promoActiveNow = (!start || start <= new Date()) && (!end || end >= new Date());
+      // hanya tampil jika ulang tahun dalam 7 hari ke depan, promo aktif, dan (jika ada) tanggal ulang tahun berada dalam periode promo
+      return d >= 0 && d <= 7 && promoActiveNow && withinPeriod;
+    }
+    return p.type === 'EVENT' || p.type === 'EXCLUSIVE_MEMBER';
+  });
   const filteredPromos = promoFilter === 'ALL' ? memberPromos : memberPromos.filter((p: any) => p.type === promoFilter);
 
   function statusOf(ev: any) {
@@ -554,6 +592,16 @@ export default function ExclusiveMemberPage() {
               >
                 Member Exclusive
               </button>
+              <button 
+                onClick={() => setPromoFilter('BIRTHDAY_GIFT')} 
+                className={`px-6 py-3 text-sm font-medium rounded-xl border-2 transition-all duration-300 whitespace-nowrap ${
+                  promoFilter === 'BIRTHDAY_GIFT' 
+                    ? 'bg-[#0F4D39] text-white border-[#0F4D39] shadow-lg transform scale-105' 
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-[#0F4D39] hover:text-white hover:border-[#0F4D39] hover:shadow-md'
+                } focus:outline-none focus:ring-4 focus:ring-[#0F4D39]/20`}
+              >
+                Hadiah Ulang Tahun
+              </button>
             </div>
           </div>
 
@@ -561,7 +609,13 @@ export default function ExclusiveMemberPage() {
             {filteredPromos.map((p: any) => {
               const start = p.startDate ? new Date(p.startDate) : null;
               const end = p.endDate ? new Date(p.endDate) : null;
-              const typeLabel = p.type === 'EVENT' ? 'Event' : (p.type === 'EXCLUSIVE_MEMBER' ? 'Member Exclusive' : p.type);
+              const typeLabel = p.type === 'EVENT' 
+                ? 'Event' 
+                : p.type === 'EXCLUSIVE_MEMBER' 
+                  ? 'Member Exclusive' 
+                  : p.type === 'BIRTHDAY_GIFT' 
+                    ? 'Hadiah Ulang Tahun' 
+                    : p.type;
               return (
                 <div key={p.id} className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl border border-gray-200 overflow-hidden transition-all duration-500 hover:scale-[1.03] hover:-translate-y-2">
                   {p.imageUrl && (
@@ -605,7 +659,13 @@ export default function ExclusiveMemberPage() {
                   {selectedItem.title}
                 </h2>
                 <span className="text-xs px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 whitespace-nowrap font-medium">
-                  {selectedItem.type === 'EVENT' ? 'Event' : (selectedItem.type === 'EXCLUSIVE_MEMBER' ? 'Member Exclusive' : selectedItem.type)}
+                  {selectedItem.type === 'EVENT' 
+                    ? 'Event' 
+                    : selectedItem.type === 'EXCLUSIVE_MEMBER' 
+                      ? 'Member Exclusive' 
+                      : selectedItem.type === 'BIRTHDAY_GIFT' 
+                        ? 'Hadiah Ulang Tahun' 
+                        : selectedItem.type}
                 </span>
               </div>
               
@@ -693,7 +753,11 @@ export default function ExclusiveMemberPage() {
                         }}
                         className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition-all duration-300 text-sm font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
                       >
-                        Join Event
+                        {p.linkedEvent 
+                          ? 'Join Event' 
+                          : p.type === 'BIRTHDAY_GIFT' 
+                            ? 'Klaim Hadiah Ulang Tahun' 
+                            : 'Daftar Promo'}
                       </button>
                     </div>
                   </div>

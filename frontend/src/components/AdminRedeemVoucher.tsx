@@ -21,7 +21,7 @@ interface ClaimedVoucher {
   id: string;
   memberId: string;
   memberName: string;
-  type: 'ticket' | 'points' | 'event';
+  type: 'ticket' | 'points' | 'event' | 'tourism_ticket' | 'benefit';
   itemId: string;
   itemName: string;
   status: 'PENDING' | 'REDEEMED';
@@ -127,9 +127,21 @@ export default function AdminRedeemVoucher() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
+      // Load tourism bookings
+      const tourismResponse = await fetch(`/api/admin/tourism-bookings`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // Load benefit redemptions
+      const benefitResponse = await fetch(`/api/admin/benefit-redemptions`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
       const tickets = ticketsResponse.ok ? await ticketsResponse.json() : [];
       const points = pointsResponse.ok ? await pointsResponse.json() : [];
       const events = eventsResponse.ok ? await eventsResponse.json() : [];
+      const tourism = tourismResponse.ok ? await tourismResponse.json() : [];
+      const benefits = benefitResponse.ok ? await benefitResponse.json() : [];
 
       // Combine and format data
       const combined: ClaimedVoucher[] = [
@@ -165,6 +177,28 @@ export default function AdminRedeemVoucher() {
           status: e.status === 'REGISTERED' ? 'PENDING' : 'REDEEMED',
           claimedAt: e.createdAt,
           details: e
+        })),
+        ...tourism.map((b: any) => ({
+          id: b.id,
+          memberId: b.memberId || '',
+          memberName: b.member?.fullName || b.customerName || 'Unknown',
+          type: 'tourism_ticket' as const,
+          itemId: b.id,
+          itemName: b.ticket?.name || 'Tiket Wisata',
+          status: b.redeemedAt ? 'REDEEMED' : (b.status === 'PAID' ? 'PENDING' : 'PENDING'),
+          claimedAt: b.createdAt,
+          details: b
+        })),
+        ...benefits.map((br: any) => ({
+          id: br.id,
+          memberId: br.memberId,
+          memberName: br.member?.fullName || 'Unknown',
+          type: 'benefit' as const,
+          itemId: br.id,
+          itemName: br.benefit?.title || 'Benefit Voucher',
+          status: br.isUsed ? 'REDEEMED' : 'PENDING',
+          claimedAt: br.createdAt,
+          details: br
         }))
       ];
 
@@ -195,7 +229,9 @@ export default function AdminRedeemVoucher() {
         ...(selectedVoucher.type === 'event' && { 
           registrationId: selectedVoucher.itemId,
           eventId: selectedVoucher.details?.eventId 
-        })
+        }),
+        ...(selectedVoucher.type === 'tourism_ticket' && { bookingId: selectedVoucher.itemId }),
+        ...(selectedVoucher.type === 'benefit' && { redemptionId: selectedVoucher.itemId })
       };
 
       const response = await fetch(`/api/admin/redeem`, {
@@ -258,16 +294,27 @@ export default function AdminRedeemVoucher() {
         const ticket = memberTickets.find(t => t.id === ticketId);
         if (!ticket) return null;
         
+        // Build payload based on voucher type
+        const payload = {
+          memberId: ticket.memberId,
+          type: ticket.type,
+          ...(ticket.type === 'ticket' && { ticketId: ticket.itemId }),
+          ...(ticket.type === 'points' && { redemptionId: ticket.itemId }),
+          ...(ticket.type === 'event' && { 
+            registrationId: ticket.itemId,
+            eventId: (ticket as any)?.details?.eventId
+          }),
+          ...(ticket.type === 'tourism_ticket' && { bookingId: ticket.itemId }),
+          ...(ticket.type === 'benefit' && { redemptionId: ticket.itemId })
+        };
+
         const response = await fetch('/api/admin/redeem', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            type: ticket.type,
-            id: ticket.id,
-          }),
+          body: JSON.stringify(payload),
         });
         
         if (!response.ok) {
@@ -347,7 +394,7 @@ export default function AdminRedeemVoucher() {
     try {
       const token = localStorage.getItem("token");
       
-      const [ticketsRes, pointsRes, eventsRes] = await Promise.all([
+      const [ticketsRes, pointsRes, eventsRes, tourismRes, benefitsRes] = await Promise.all([
         fetch(`/api/admin/tickets?memberId=${memberId}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
@@ -357,12 +404,20 @@ export default function AdminRedeemVoucher() {
         fetch(`/api/admin/event-registrations?memberId=${memberId}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
+        fetch(`/api/admin/tourism-bookings?memberId=${memberId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`/api/admin/benefit-redemptions?memberId=${memberId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
       ]);
 
-      const [tickets, points, events] = await Promise.all([
+      const [tickets, points, events, tourism, benefits] = await Promise.all([
         ticketsRes.json(),
         pointsRes.json(),
         eventsRes.json(),
+        tourismRes.json(),
+        benefitsRes.json(),
       ]);
 
       const allTickets: ClaimedVoucher[] = [
@@ -398,6 +453,28 @@ export default function AdminRedeemVoucher() {
           claimedAt: event.registeredAt,
           status: event.status === 'REGISTERED' ? 'PENDING' : event.status,
           details: event,
+        })),
+        ...tourism.map((b: any) => ({
+          id: b.id,
+          type: 'tourism_ticket' as const,
+          itemId: b.id,
+          itemName: b.ticket?.name || 'Tiket Wisata',
+          memberId: b.memberId || '',
+          memberName: b.member?.fullName || b.customerName || 'Unknown',
+          claimedAt: b.createdAt,
+          status: b.redeemedAt ? 'REDEEMED' : (b.status === 'PAID' ? 'PENDING' : 'PENDING'),
+          details: b,
+        })),
+        ...benefits.map((br: any) => ({
+          id: br.id,
+          type: 'benefit' as const,
+          itemId: br.id,
+          itemName: br.benefit?.title || 'Benefit Voucher',
+          memberId: br.memberId,
+          memberName: br.member?.fullName || 'Unknown',
+          claimedAt: br.createdAt,
+          status: br.isUsed ? 'REDEEMED' : 'PENDING',
+          details: br,
         })),
       ];
 
@@ -542,7 +619,7 @@ export default function AdminRedeemVoucher() {
       const token = localStorage.getItem("token");
       
       // Load all vouchers for specific member
-      const [ticketsResponse, pointsResponse, eventsResponse] = await Promise.all([
+      const [ticketsResponse, pointsResponse, eventsResponse, tourismResponse, benefitsResponse] = await Promise.all([
         fetch(`/api/admin/tickets?memberId=${memberId}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
@@ -551,12 +628,20 @@ export default function AdminRedeemVoucher() {
         }),
         fetch(`/api/admin/event-registrations?memberId=${memberId}`, {
           headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`/api/admin/tourism-bookings?memberId=${memberId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`/api/admin/benefit-redemptions?memberId=${memberId}`, {
+          headers: { Authorization: `Bearer ${token}` },
         })
       ]);
 
       const tickets = ticketsResponse.ok ? await ticketsResponse.json() : [];
       const points = pointsResponse.ok ? await pointsResponse.json() : [];
       const events = eventsResponse.ok ? await eventsResponse.json() : [];
+      const tourism = tourismResponse.ok ? await tourismResponse.json() : [];
+      const benefits = benefitsResponse.ok ? await benefitsResponse.json() : [];
 
       // Combine and format data
       const combined: ClaimedVoucher[] = [
@@ -592,7 +677,29 @@ export default function AdminRedeemVoucher() {
           status: e.status === 'REGISTERED' ? 'PENDING' : 'REDEEMED',
           claimedAt: e.createdAt,
           details: e
-        }))
+        })),
+        ...tourism.map((b: any) => ({
+          id: b.id,
+          memberId: b.memberId || '',
+          memberName: b.member?.fullName || b.customerName || 'Unknown',
+          type: 'tourism_ticket' as const,
+          itemId: b.id,
+          itemName: b.ticket?.name || 'Tiket Wisata',
+          status: b.redeemedAt ? 'REDEEMED' : (b.status === 'PAID' ? 'PENDING' : 'PENDING'),
+          claimedAt: b.createdAt,
+          details: b
+        })),
+        ...benefits.map((br: any) => ({
+          id: br.id,
+          memberId: br.memberId,
+          memberName: br.member?.fullName || 'Unknown',
+          type: 'benefit' as const,
+          itemId: br.id,
+          itemName: br.benefit?.title || 'Benefit Voucher',
+          status: br.isUsed ? 'REDEEMED' : 'PENDING',
+          claimedAt: br.createdAt,
+          details: br
+        })),
       ];
 
       setMemberTickets(combined);
@@ -1250,9 +1357,11 @@ export default function AdminRedeemVoucher() {
                            <div>
                              <h4 className="font-medium text-gray-900">{ticket.itemName}</h4>
                              <p className="text-sm text-gray-600">
-                               {ticket.type === 'ticket' && '🎫 Tiket'}
-                               {ticket.type === 'points' && '💰 Poin Reward'}
-                               {ticket.type === 'event' && '📅 Event Registration'}
+                              {ticket.type === 'ticket' && '🎫 Tiket'}
+                              {ticket.type === 'points' && '💰 Poin Reward'}
+                              {ticket.type === 'event' && '📅 Event Registration'}
+                              {ticket.type === 'tourism_ticket' && '🏞️ Tiket Wisata'}
+                              {ticket.type === 'benefit' && '🎁 Benefit'}
                              </p>
                              <p className="text-xs text-gray-500">
                                Diklaim: {new Date(ticket.claimedAt).toLocaleDateString('id-ID')}
