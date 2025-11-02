@@ -150,15 +150,15 @@ jobs:
             # Create/Update systemd service units dynamically
             # Write environment file for backend from GitHub Secrets (if provided)
             sudo mkdir -p /etc/lodge-family
-            sudo tee /etc/lodge-family/backend.env > /dev/null << ENV
-            NODE_ENV=production
-            PORT=5001
-            DATABASE_URL=${{ secrets.DATABASE_URL }}
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            FRONTEND_URL=${{ secrets.FRONTEND_URL }}
-            ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL }}
-            ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
-ENV
+            printf "%s\n" \
+            "NODE_ENV=production" \
+            "PORT=5001" \
+            "DATABASE_URL=${{ secrets.DATABASE_URL }}" \
+            "JWT_SECRET=${{ secrets.JWT_SECRET }}" \
+            "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" \
+            "ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL }}" \
+            "ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}" \
+            | sudo tee /etc/lodge-family/backend.env > /dev/null
             sudo chmod 640 /etc/lodge-family/backend.env
             sudo chown root:www-data /etc/lodge-family/backend.env
 
