@@ -44,6 +44,20 @@ app.all('/api/health', (_req, res) => {
   });
 });
 
+// Additional safety: intercept /api/health via /api mount to ensure match
+app.use('/api', (req, res, next) => {
+  if (req.path === '/health') {
+    return res.json({
+      status: 'ok',
+      service: 'backend',
+      env: process.env.NODE_ENV || 'development',
+      port: process.env.PORT || 5001,
+      timestamp: new Date().toISOString(),
+    });
+  }
+  next();
+});
+
 // Debug middleware to log request details
 app.use((req, res, next) => {
   console.log('🚀🚀🚀 MIDDLEWARE HIT! 🚀🚀🚀');
