@@ -114,8 +114,8 @@ jobs:
           # Upload deployment package
           scp -r deployment-package/* ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$DEPLOY_DIR/
 
-          # Run deployment steps on VPS
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+          # Run deployment steps on VPS (expand DEPLOY_DIR locally into remote script)
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
             set -e
             cd $DEPLOY_DIR
 
@@ -187,7 +187,7 @@ UNIT
             # Cleanup old deployments (keep last 3)
             cd /var/www
             ls -dt lodge-family-* | tail -n +4 | xargs sudo rm -rf || true
-          EOF
+EOF
 
       - name: Health Check
         run: |
