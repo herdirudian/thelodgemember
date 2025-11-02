@@ -33,8 +33,8 @@ app.get('/api/very-early-test', (req, res) => {
   res.json({ message: 'Very early test works!', timestamp: new Date().toISOString() });
 });
 
-// Health check endpoint placed early to avoid being overshadowed by other routers
-app.get('/api/health', (_req, res) => {
+// Health check endpoint placed early; use app.all to catch GET/HEAD/others
+app.all('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     service: 'backend',
