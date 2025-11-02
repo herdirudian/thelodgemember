@@ -165,6 +165,29 @@ app.get('/api/member/direct-test', (_req, res) => {
   res.json({ message: 'Direct test endpoint works!' });
 });
 
+// Debug endpoint: list registered routes
+app.get('/api/_routes', (_req, res) => {
+  const routes: any[] = [];
+  const stack = (app as any)._router?.stack || [];
+  for (const layer of stack) {
+    if (layer.route) {
+      const path = layer.route?.path;
+      const methods = layer.route?.methods ? Object.keys(layer.route.methods) : [];
+      routes.push({ type: 'route', path, methods });
+    } else if (layer.name === 'router' && layer.handle?.stack) {
+      for (const sub of layer.handle.stack) {
+        const route = sub.route;
+        if (route) {
+          const path = route.path;
+          const methods = route.methods ? Object.keys(route.methods) : [];
+          routes.push({ type: 'router', path, methods, prefix: layer.regexp?.source });
+        }
+      }
+    }
+  }
+  res.json({ count: routes.length, routes });
+});
+
 // Static files for generated membership cards
 app.use('/files/cards', express.static(path.join(process.cwd(), 'cards')));
 
