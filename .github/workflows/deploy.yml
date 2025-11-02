@@ -69,6 +69,11 @@ jobs:
           mkdir -p deployment-package/scripts
           cp -r scripts/*.sh deployment-package/scripts/ 2>/dev/null || true
 
+          # Copy nginx config if present in repo root
+          if [ -f nginx-family-domain-fixed.conf ]; then
+            cp nginx-family-domain-fixed.conf deployment-package/
+          fi
+
           # Create deployment info
           echo "DEPLOYMENT_DATE=$(date)" > deployment-package/deployment-info.txt
           echo "COMMIT_SHA=${{ github.sha }}" >> deployment-package/deployment-info.txt
@@ -133,11 +138,28 @@ jobs:
             sudo systemctl stop lodge-family-backend || true
             sudo systemctl stop lodge-family-frontend || true
 
+            # Ensure permissions for deployment directory
+            sudo chown -R www-data:www-data $DEPLOY_DIR
+
             # Update symlink to current
             sudo rm -f /var/www/lodge-family-current
             sudo ln -s $DEPLOY_DIR /var/www/lodge-family-current
 
             # Create/Update systemd service units dynamically
+            # Write environment file for backend from GitHub Secrets (if provided)
+            sudo mkdir -p /etc/lodge-family
+            sudo tee /etc/lodge-family/backend.env > /dev/null << ENV
+            NODE_ENV=production
+            PORT=5001
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+            ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL }}
+            ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
+ENV
+            sudo chmod 640 /etc/lodge-family/backend.env
+            sudo chown root:www-data /etc/lodge-family/backend.env
+
             sudo tee /etc/systemd/system/lodge-family-backend.service > /dev/null << 'UNIT'
             [Unit]
             Description=Lodge Family Backend Service
@@ -146,7 +168,9 @@ jobs:
             [Service]
             Type=simple
             WorkingDirectory=/var/www/lodge-family-current/backend
-            ExecStart=/usr/bin/node /var/www/lodge-family-current/backend/dist/index.js
+            ExecStart=/usr/bin/env node /var/www/lodge-family-current/backend/dist/index.js
+            EnvironmentFile=/etc/lodge-family/backend.env
+            Environment=PATH=/usr/local/bin:/usr/bin
             Restart=always
             RestartSec=10
             User=www-data
@@ -163,7 +187,9 @@ UNIT
             [Service]
             Type=simple
             WorkingDirectory=/var/www/lodge-family-current/frontend
-            ExecStart=/usr/bin/npm run start --prefix /var/www/lodge-family-current/frontend
+            ExecStart=/usr/bin/env bash -lc 'npm run start --prefix /var/www/lodge-family-current/frontend'
+            Environment=NODE_ENV=production
+            Environment=PATH=/usr/local/bin:/usr/bin
             Restart=always
             RestartSec=10
             User=www-data
@@ -179,7 +205,11 @@ UNIT
             sudo systemctl start lodge-family-backend
             sudo systemctl start lodge-family-frontend
 
-            # Test nginx configuration if present and reload
+            # Install nginx config if package included and reload
+            if [ -f "$DEPLOY_DIR/nginx-family-domain-fixed.conf" ]; then
+              sudo cp "$DEPLOY_DIR/nginx-family-domain-fixed.conf" /etc/nginx/sites-available/lodge-family
+              sudo ln -sf /etc/nginx/sites-available/lodge-family /etc/nginx/sites-enabled/lodge-family
+            fi
             if sudo nginx -t; then
               sudo systemctl reload nginx || true
             fi
@@ -192,7 +222,7 @@ EOF
       - name: Health Check
         run: |
           # Wait for services to start
-          sleep 30
+          sleep 60
           
           # Check if services are running
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
