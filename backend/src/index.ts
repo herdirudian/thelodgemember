@@ -33,6 +33,17 @@ app.get('/api/very-early-test', (req, res) => {
   res.json({ message: 'Very early test works!', timestamp: new Date().toISOString() });
 });
 
+// Health check endpoint placed early to avoid being overshadowed by other routers
+app.get('/api/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'backend',
+    env: process.env.NODE_ENV || 'development',
+    port: process.env.PORT || 5001,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Debug middleware to log request details
 app.use((req, res, next) => {
   console.log('🚀🚀🚀 MIDDLEWARE HIT! 🚀🚀🚀');
