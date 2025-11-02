@@ -84,7 +84,11 @@ dist
 
 # Gatsby files
 .cache/
+# Default 'public' ignore (for Gatsby) can hide Next.js assets.
+# Keep root-level public ignored, but allow frontend/public.
 public
+!frontend/public/
+!frontend/public/**
 
 # Storybook build outputs
 .out
