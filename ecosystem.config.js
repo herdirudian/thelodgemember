@@ -2,9 +2,8 @@ module.exports = {
   apps: [
     {
       name: 'thelodge-backend',
-      script: './backend/src/index.ts',
+      script: './backend/dist/index.js',
       interpreter: 'node',
-      interpreter_args: '--loader ts-node/esm',
       cwd: '/var/www/thelodgefamily/current',
       instances: 1,
       exec_mode: 'cluster',
