@@ -256,16 +256,36 @@ router.post('/verify-email-code', authLimiter, async (req, res) => {
 
 router.post('/login', authLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body as { email: string; password: string };
+    // Guard: require JSON body and mandatory fields to avoid 500 on undefined body
+    const isJson = req.is('application/json');
+    if (!isJson) {
+      return res.status(415).json({ message: 'Unsupported Media Type: gunakan Content-Type application/json' });
+    }
+
+    const emailInput = (req.body && typeof req.body === 'object') ? req.body.email : undefined;
+    const passwordInput = (req.body && typeof req.body === 'object') ? req.body.password : undefined;
+
+    const email = String(emailInput || '').toLowerCase().trim();
+    const password = String(passwordInput || '');
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email dan password harus diisi' });
+    }
+
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return res.status(401).json({ message: 'Invalid credentials' });
+
+    if (!user.password || typeof user.password !== 'string' || user.password.length < 20) {
+      return res.status(400).json({ message: 'Password akun belum valid. Silakan lakukan reset password.' });
+    }
+
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
+
     const token = jwt.sign({ uid: user.id, role: user.role, adminRole: user.adminRole, isActive: user.isActive }, config.jwtSecret, { expiresIn: '7d' });
     const member = await prisma.member.findUnique({ where: { userId: user.id } });
     res.json({ token, role: user.role, adminRole: user.adminRole, isActive: user.isActive, member });
   } catch (e) {
-    console.error(e);
+    console.error('Login error:', e);
     res.status(500).json({ message: 'Server error' });
   }
 });
