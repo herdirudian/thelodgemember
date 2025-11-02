@@ -24,3 +24,5 @@ Proxy and API Calls
 Notes
 - Health checks: backend `GET /api` returns JSON.
 - Dev Fast Refresh errors in console (HMR) are expected and do not affect functionality.
+[![CI Status](https://github.com/herdirudian/thelodgemember/actions/workflows/ci.yml/badge.svg)](https://github.com/herdirudian/thelodgemember/actions/workflows/ci.yml)
+[![Deploy Status](https://github.com/herdirudian/thelodgemember/actions/workflows/deploy.yml/badge.svg)](https://github.com/herdirudian/thelodgemember/actions/workflows/deploy.yml)
