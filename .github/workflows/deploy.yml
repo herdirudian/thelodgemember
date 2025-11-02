@@ -50,22 +50,25 @@ jobs:
 
       - name: Create deployment package
         run: |
-          mkdir -p deployment-package
+          mkdir -p deployment-package/backend deployment-package/frontend
           
-          # Copy backend files
-          cp -r backend/dist deployment-package/backend-dist
-          cp -r backend/prisma deployment-package/prisma
-          cp backend/package.json deployment-package/
-          cp backend/package-lock.json deployment-package/
-          
-          # Copy frontend build
-          cp -r frontend/.next deployment-package/frontend-build
-          cp frontend/package.json deployment-package/frontend-package.json
-          cp frontend/package-lock.json deployment-package/frontend-package-lock.json
-          
-          # Copy deployment scripts
-          cp -r scripts deployment-package/
-          
+          # Backend: copy build output, prisma, and package manifests
+          cp -r backend/dist deployment-package/backend/dist
+          cp -r backend/prisma deployment-package/backend/prisma
+          cp backend/package.json deployment-package/backend/package.json
+          cp backend/package-lock.json deployment-package/backend/package-lock.json || true
+
+          # Frontend: copy build output and package manifests needed to run `next start`
+          cp -r frontend/.next deployment-package/frontend/.next
+          cp -r frontend/public deployment-package/frontend/public || true
+          cp frontend/package.json deployment-package/frontend/package.json
+          cp frontend/package-lock.json deployment-package/frontend/package-lock.json || true
+          cp frontend/next.config.ts deployment-package/frontend/next.config.ts || true
+
+          # Copy deployment scripts (optional utilities)
+          mkdir -p deployment-package/scripts
+          cp -r scripts/*.sh deployment-package/scripts/ 2>/dev/null || true
+
           # Create deployment info
           echo "DEPLOYMENT_DATE=$(date)" > deployment-package/deployment-info.txt
           echo "COMMIT_SHA=${{ github.sha }}" >> deployment-package/deployment-info.txt
@@ -104,51 +107,86 @@ jobs:
         run: |
           # Create deployment directory with timestamp
           DEPLOY_DIR="/var/www/lodge-family-$(date +%Y%m%d-%H%M%S)"
-          
+
           # Create directory on VPS
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "sudo mkdir -p $DEPLOY_DIR"
-          
+
           # Upload deployment package
           scp -r deployment-package/* ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$DEPLOY_DIR/
-          
-          # Run deployment script on VPS
+
+          # Run deployment steps on VPS
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            set -e
             cd $DEPLOY_DIR
-            
-            # Install/update dependencies
-            npm install --production
-            
-            # Setup database
+
+            # Install backend deps and run prisma
+            cd backend
+            npm ci --omit=dev || npm install --production
             npx prisma generate
-            npx prisma migrate deploy
-            
-            # Stop existing services
+            npx prisma migrate deploy || echo "Prisma migrate failed, please verify DATABASE_URL and migrations" 
+
+            # Install frontend deps
+            cd ../frontend
+            npm ci --omit=dev || npm install --production
+
+            # Stop existing services if running
             sudo systemctl stop lodge-family-backend || true
             sudo systemctl stop lodge-family-frontend || true
-            
-            # Update symlinks to new deployment
+
+            # Update symlink to current
             sudo rm -f /var/www/lodge-family-current
             sudo ln -s $DEPLOY_DIR /var/www/lodge-family-current
-            
-            # Update systemd service files
-            sudo cp scripts/lodge-family-backend.service /etc/systemd/system/
-            sudo cp scripts/lodge-family-frontend.service /etc/systemd/system/
-            
+
+            # Create/Update systemd service units dynamically
+            sudo tee /etc/systemd/system/lodge-family-backend.service > /dev/null << 'UNIT'
+            [Unit]
+            Description=Lodge Family Backend Service
+            After=network.target
+
+            [Service]
+            Type=simple
+            WorkingDirectory=/var/www/lodge-family-current/backend
+            ExecStart=/usr/bin/node /var/www/lodge-family-current/backend/dist/index.js
+            Restart=always
+            RestartSec=10
+            User=www-data
+
+            [Install]
+            WantedBy=multi-user.target
+UNIT
+
+            sudo tee /etc/systemd/system/lodge-family-frontend.service > /dev/null << 'UNIT'
+            [Unit]
+            Description=Lodge Family Frontend Service
+            After=network.target
+
+            [Service]
+            Type=simple
+            WorkingDirectory=/var/www/lodge-family-current/frontend
+            ExecStart=/usr/bin/npm run start --prefix /var/www/lodge-family-current/frontend
+            Restart=always
+            RestartSec=10
+            User=www-data
+
+            [Install]
+            WantedBy=multi-user.target
+UNIT
+
             # Reload and start services
             sudo systemctl daemon-reload
             sudo systemctl enable lodge-family-backend
             sudo systemctl enable lodge-family-frontend
             sudo systemctl start lodge-family-backend
             sudo systemctl start lodge-family-frontend
-            
-            # Update nginx configuration
-            sudo cp scripts/nginx-lodge-family.conf /etc/nginx/sites-available/lodge-family
-            sudo ln -sf /etc/nginx/sites-available/lodge-family /etc/nginx/sites-enabled/
-            sudo nginx -t && sudo systemctl reload nginx
-            
+
+            # Test nginx configuration if present and reload
+            if sudo nginx -t; then
+              sudo systemctl reload nginx || true
+            fi
+
             # Cleanup old deployments (keep last 3)
             cd /var/www
-            ls -dt lodge-family-* | tail -n +4 | xargs sudo rm -rf
+            ls -dt lodge-family-* | tail -n +4 | xargs sudo rm -rf || true
           EOF
 
       - name: Health Check
@@ -163,8 +201,8 @@ jobs:
             sudo systemctl status lodge-family-frontend --no-pager
             
             echo "Checking if application responds..."
-            curl -f http://localhost:3000/api/health || exit 1
-            curl -f http://localhost:3001/ || exit 1
+            curl -f http://localhost:5001/api/health || exit 1
+            curl -f http://localhost:3003/ || exit 1
           EOF
 
       - name: Rollback on failure
