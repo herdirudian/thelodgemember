@@ -116,7 +116,7 @@ jobs:
           DEPLOY_DIR="/var/www/lodge-family-$(date +%Y%m%d-%H%M%S)"
 
           # Create directory on VPS
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "sudo mkdir -p $DEPLOY_DIR"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "sudo mkdir -p $DEPLOY_DIR && sudo chown -R ${{ secrets.VPS_USER }}:${{ secrets.VPS_USER }} $DEPLOY_DIR"
 
           # Upload deployment package
           scp -r deployment-package/* ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$DEPLOY_DIR/
