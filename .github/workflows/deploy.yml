@@ -139,6 +139,18 @@ jobs:
             fi
             cd $DEPLOY_DIR
 
+            # Export environment from GitHub Secrets for pre-service commands (Prisma, npm)
+            export NODE_ENV=production
+            export PORT=5001
+            export DATABASE_URL='${{ secrets.DATABASE_URL }}'
+            export JWT_SECRET='${{ secrets.JWT_SECRET }}'
+            export FRONTEND_URL='${{ secrets.FRONTEND_URL }}'
+            export ADMIN_EMAIL='${{ secrets.ADMIN_EMAIL }}'
+            export ADMIN_PASSWORD='${{ secrets.ADMIN_PASSWORD }}'
+            if [ -z "$DATABASE_URL" ]; then
+              echo "Warning: DATABASE_URL is not set; Prisma migrate will fail" >&2
+            fi
+
             # Install backend deps and run prisma
             cd backend
             npm ci --omit=dev || npm install --production
