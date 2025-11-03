@@ -81,7 +81,7 @@ fi
 # Install dependencies for backend
 echo "Installing backend dependencies..."
 cd /var/www/thelodgefamily/current/backend
-npm install --production
+npm install
 
 # Install dependencies for frontend
 echo "Installing frontend dependencies..."
@@ -104,6 +104,11 @@ if [ ! -f .env ]; then
     fi
 fi
 
+# Build backend (TypeScript -> dist)
+echo "Building backend..."
+cd /var/www/thelodgefamily/current/backend
+npm run build || echo "Backend build failed - please check TypeScript configuration"
+
 # Run database migrations if prisma exists and .env is properly configured
 echo "Checking database configuration..."
 if [ -f "package.json" ] && grep -q "prisma" package.json; then
@@ -124,9 +129,18 @@ else
     echo "Prisma not found, skipping migrations"
 fi
 
-# Restart services
+# Restart services (force reload ecosystem)
 echo "Restarting services..."
-pm2 restart all || pm2 start ecosystem.config.js || echo "PM2 restart failed, continuing..."
+# Ensure we are in the project root where ecosystem.config.js resides
+cd /var/www/thelodgefamily/current || {
+  echo "Failed to change directory to /var/www/thelodgefamily/current"; exit 1;
+}
+
+# Force restart processes to apply updated ecosystem and script paths
+pm2 delete thelodge-backend || true
+pm2 delete thelodge-frontend || true
+pm2 start ecosystem.config.js --env production || echo "PM2 start via ecosystem failed"
+pm2 save || echo "PM2 save failed"
 
 # Restart Nginx
 echo "Restarting Nginx..."
@@ -137,6 +151,17 @@ echo "Deployment completed successfully!"
 echo "Website: https://family.thelodgegroup.id"
 echo "Check status: pm2 status"
 echo "Check logs: pm2 logs"
+
+# Extra diagnostics
+echo "\nPM2 diagnostic info:"
+pm2 status || true
+pm2 describe thelodge-backend || true
+echo "\nCurrent directory contents:"
+pwd
+ls -la /var/www/thelodgefamily/current | head -n 50
+ls -la /var/www/thelodgefamily/current/backend/src | head -n 50
+echo "\nbackend/ecosystem.config.js:" 
+cat /var/www/thelodgefamily/current/backend/ecosystem.config.js || true
 '@
 
 # Simpan script ke file temporary dengan Unix line endings

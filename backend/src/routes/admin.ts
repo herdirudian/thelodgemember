@@ -13,6 +13,7 @@ import path from 'path';
 import { VoucherType } from '@prisma/client'
 import { generateQRDataURL } from '../utils/qr'
 import { createRedeemProofPDF } from '../utils/pdf'
+import { sendEmail } from '../utils/email'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { NotificationService } from '../utils/notificationService';
@@ -514,6 +515,82 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
           qrCode,
           proofUrl,
           details: updated
+        };
+        voucherFound = true;
+      }
+    }
+
+    // Jika belum ditemukan, cek pra-registrasi publik (public_registration)
+    if (!voucherFound) {
+      // Coba cari berdasarkan friendlyCode terlebih dahulu
+      let publicReg = await prisma.publicRegistration.findFirst({ where: { friendlyCode: code } });
+      // Jika tidak ditemukan dan kode terlihat numerik, coba berdasarkan id
+      if (!publicReg) {
+        const numericId = parseInt(code, 10);
+        if (!Number.isNaN(numericId)) {
+          publicReg = await prisma.publicRegistration.findUnique({ where: { id: numericId } });
+        }
+      }
+
+      if (publicReg) {
+        // Cegah double redeem dengan melihat riwayat untuk voucher ini
+        const already = await prisma.redeemHistory.findFirst({ where: { voucherType: 'EVENT' as any, voucherId: publicReg.id } });
+        if (already) {
+          return res.status(400).json({ message: 'Voucher pra-registrasi sudah pernah di-redeem' });
+        }
+
+        memberId = '';
+        memberName = publicReg.name || '';
+        voucherType = 'EVENT' as any;
+        voucherId = publicReg.id;
+        voucherLabel = publicReg.eventName;
+
+        // Generate proof
+        const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
+        const qrCode = `REDEEM-${publicReg.id}`;
+        const qrDataURL = await generateQRDataURL(qrCode);
+
+        const uploadsDir = path.join(process.cwd(), 'uploads', 'redeem-proofs');
+        try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
+        const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
+        const outputPath = path.join(uploadsDir, filename);
+
+        await createRedeemProofPDF({ 
+          outputPath, 
+          memberName, 
+          voucherType: 'Pra-Registrasi Publik', 
+          voucherLabel, 
+          redeemedAt, 
+          qrDataUrl: qrDataURL, 
+          adminName, 
+          companyName: 'The Lodge Family' 
+        });
+
+        const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
+
+        await prisma.redeemHistory.create({ 
+          data: { 
+            memberId, 
+            memberName, 
+            voucherType, 
+            voucherId, 
+            voucherLabel, 
+            redeemedAt, 
+            adminId, 
+            adminName, 
+            proofUrl 
+          } 
+        });
+
+        result = {
+          success: true,
+          memberName,
+          memberId,
+          voucherName: voucherLabel,
+          voucherType: 'Event',
+          qrCode,
+          proofUrl,
+          details: publicReg
         };
         voucherFound = true;
       }
@@ -1819,6 +1896,24 @@ router.post('/redeem', adminAuth, async (req, res) => {
         }
       }
     }
+
+    // Support friendly code for public pre-registration
+    if (!payload) {
+      const publicReg = await prisma.publicRegistration.findFirst({ where: { friendlyCode } });
+      if (publicReg) {
+        const prPayload = {
+          type: 'public_registration',
+          registrationId: publicReg.id,
+          eventName: publicReg.eventName,
+          name: publicReg.name,
+          email: publicReg.email,
+          phone: publicReg.phone,
+        };
+        if (verifyFriendlyVoucherCode(friendlyCode, prPayload)) {
+          payload = prPayload;
+        }
+      }
+    }
     
     if (!payload) {
       return res.status(400).json({ message: 'Invalid voucher code' });
@@ -1983,6 +2078,30 @@ router.post('/redeem', adminAuth, async (req, res) => {
         // Do not fail the redemption if notification fails
       }
       return res.json({ success: true, benefitRedemption: updated, proofUrl });
+    }
+    if (payload.type === 'public_registration') {
+      // Support redeeming public pre-registration voucher via QR scan
+      const pr = await prisma.publicRegistration.findUnique({ where: { id: payload.registrationId } });
+      if (!pr) return res.status(404).json({ message: 'Public registration not found' });
+      // Prevent double redeem by checking existing history for same voucher
+      const already = await prisma.redeemHistory.findFirst({ where: { voucherType: 'EVENT' as any, voucherId: pr.id } });
+      if (already) return res.status(400).json({ message: 'Already redeemed' });
+      memberId = '';
+      memberName = pr.name || '';
+      voucherType = 'EVENT' as any;
+      voucherId = pr.id;
+      voucherLabel = payload.eventName || 'Pra-Registrasi Publik';
+      const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
+      const qrUrl = data && hash ? `${baseUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}` : `${baseUrl}/api/verify?friendlyCode=${payload.friendlyCode || pr.id}`;
+      const qrDataURL = await generateQRDataURL(qrUrl);
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'redeem-proofs');
+      try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
+      const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
+      const outputPath = path.join(uploadsDir, filename);
+      await createRedeemProofPDF({ outputPath, memberName, voucherType: 'Pra-Registrasi Publik', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
+      const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
+      await prisma.redeemHistory.create({ data: { memberId, memberName, voucherType, voucherId, voucherLabel, redeemedAt, adminId, adminName, proofUrl } });
+      return res.json({ success: true, publicRegistration: pr, proofUrl });
     }
     return res.status(400).json({ message: 'Unknown payload type' });
   } catch (e) {
@@ -2510,6 +2629,137 @@ router.get('/redeem-history', adminAuth, async (req, res) => {
   }
 });
 
+// Daftar pendaftar publik (Intimate Konser) dengan filter & pagination
+router.get('/public-registrations', adminAuth, async (req, res) => {
+  try {
+    const { eventName, q } = req.query as { eventName?: string; q?: string };
+    const page = Math.max(parseInt(String((req.query as any).page ?? '1'), 10) || 1, 1);
+    const pageSize = Math.min(Math.max(parseInt(String((req.query as any).pageSize ?? '20'), 10) || 20, 1), 100);
+
+    const where: any = {};
+    if (eventName && eventName.trim()) where.eventName = eventName.trim();
+    if (q && q.trim()) {
+      const term = q.trim();
+      where.OR = [
+        { name: { contains: term, mode: 'insensitive' } },
+        { email: { contains: term, mode: 'insensitive' } },
+        { phone: { contains: term, mode: 'insensitive' } },
+      ];
+    }
+
+    const [total, list] = await Promise.all([
+      prisma.publicRegistration.count({ where }),
+      prisma.publicRegistration.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
+    ]);
+
+    res.json({ total, list, page, pageSize });
+  } catch (e: any) {
+    console.error('List public registrations error:', e);
+    res.status(500).json({ message: e?.message || 'Server error' });
+  }
+});
+
+// Kirim ulang e‑voucher pra-registrasi untuk pendaftar tertentu
+router.post('/public-registrations/:id/resend', adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params as { id: string };
+    if (!id || !String(id).trim()) {
+      return res.status(400).json({ message: 'ID pendaftaran diperlukan' });
+    }
+
+    // Prisma schema mengharapkan ID bertipe Int, konversi dari param URL
+    const numericId = parseInt(String(id), 10);
+    if (Number.isNaN(numericId)) {
+      return res.status(400).json({ message: 'ID pendaftaran harus berupa angka' });
+    }
+
+    const reg = await prisma.publicRegistration.findUnique({ where: { id: numericId } });
+    if (!reg) {
+      return res.status(404).json({ message: 'Pendaftaran tidak ditemukan' });
+    }
+
+    // Bangun payload yang sama seperti saat pra-registrasi publik
+    const payload = {
+      type: 'public_registration',
+      registrationId: reg.id,
+      eventName: reg.eventName,
+      name: reg.name,
+      email: reg.email,
+      phone: reg.phone,
+    };
+    const { data: qrData, hash, friendlyCode } = signPayloadWithFriendlyCode(payload);
+    const qrUrl = `${config.appUrl}/api/verify?data=${encodeURIComponent(qrData)}&hash=${hash}`;
+    const qrDataURL = await generateQRDataURL(qrUrl);
+
+    // Backfill friendlyCode & hash into DB to enable code-based redeem if missing
+    try {
+      if (!reg.friendlyCode || !reg.qrPayloadHash) {
+        await prisma.publicRegistration.update({
+          where: { id: reg.id },
+          data: { friendlyCode, qrPayloadHash: hash },
+        });
+      }
+    } catch (backfillError) {
+      console.error('Backfill friendlyCode for resend failed:', backfillError);
+    }
+
+    // Susun email HTML dan lampiran QR
+    const subject = `E-Voucher Pra-Registrasi: ${reg.eventName}`;
+    const qrBuffer = Buffer.from(qrDataURL.split(',')[1], 'base64');
+    const attachments = [{ filename: 'qr-code.png', content: qrBuffer, cid: 'qrcode' }];
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="color: #0F4D39;">Kirim Ulang E‑Voucher Pra‑Registrasi</h2>
+        <p>Halo ${reg.name},</p>
+        <p>Berikut e‑voucher pra‑registrasi Anda untuk <strong>${reg.eventName}</strong>.</p>
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #0F4D39;">
+          <p style="margin: 0;">Simpan e‑voucher ini dan tunjukkan saat proses verifikasi.</p>
+          <p style="margin: 0;">Kode Voucher: <strong>${friendlyCode}</strong></p>
+        </div>
+        <div style="text-align: center; margin: 24px 0;">
+          <img src="cid:qrcode" alt="QR Code" style="max-width: 220px; border: 1px solid #ddd; padding: 10px; background: white;">
+        </div>
+        <h4 style="color: #0F4D39; margin-top: 0;">Cara Menggunakan:</h4>
+        <ol style="margin: 0; padding-left: 20px;">
+          <li>Tunjukkan QR code ini di menu Admin "Redeem Voucher" (oleh petugas).</li>
+          <li>Atau berikan kode voucher: <strong>${friendlyCode}</strong> untuk verifikasi manual.</li>
+        </ol>
+        <p style="text-align: center; margin-top: 20px; color: #666; font-size: 14px;">E‑voucher ini digenerate otomatis oleh sistem The Lodge Family.</p>
+      </div>
+    `;
+
+    try {
+      // Pastikan attachments dikirim pada argumen kelima (text?, attachments?)
+      await sendEmail(reg.email, subject, emailHtml, undefined, attachments);
+    } catch (emailErr) {
+      console.error('Resend public preregistration voucher email error:', emailErr);
+      return res.status(500).json({ message: 'Gagal mengirim ulang e‑voucher', error: String((emailErr as any)?.message || emailErr) });
+    }
+
+    // Catat aktivitas admin ringkas (best-effort)
+    try {
+      const adminUser = await prisma.user.findUnique({ where: { id: (req as any).user?.uid } });
+      await recordAdminActivity({
+        adminId: (req as any).user?.uid,
+        adminName: adminUser?.fullName || adminUser?.email || 'Admin',
+        adminRole: (req as any).user?.adminRole,
+        method: req.method,
+        path: req.path,
+        status: 200,
+        ip: req.ip,
+        ua: req.get('User-Agent'),
+        body: req.body,
+        query: req.query,
+      });
+    } catch {}
+
+    return res.json({ success: true, message: 'E‑voucher berhasil dikirim ulang', friendlyCode });
+  } catch (e: any) {
+    console.error('Resend public registration voucher error:', e);
+    return res.status(500).json({ message: e?.message || 'Server error' });
+  }
+});
+
 // Settings endpoints (OWNER / SUPER_ADMIN only)
 
 export const settingsPatchSchema = z.object({
@@ -2534,6 +2784,9 @@ export const settingsPatchSchema = z.object({
   xenditWebhookToken: z.string().max(255).nullable().optional(),
   xenditEnvironment: z.enum(['test', 'live']).optional(),
   maintenanceMode: z.boolean().optional(),
+  // Custom app settings
+  intimateEventTitle: z.string().min(1).max(191).optional(),
+  intimateEventQuota: z.number().int().min(1).max(100000).optional(),
   announcement: z.string().max(5000).nullable().optional(),
 }).strict();
 
@@ -2580,12 +2833,27 @@ router.get('/settings', adminAuth, async (req, res) => {
           xenditPublicKey VARCHAR(255) NULL,
           xenditWebhookToken VARCHAR(255) NULL,
           xenditEnvironment VARCHAR(16) NOT NULL DEFAULT 'test',
+          intimateEventTitle VARCHAR(191) NULL,
+          intimateEventQuota INT NULL,
           maintenanceMode BOOLEAN NOT NULL DEFAULT false,
           announcement TEXT NULL,
           createdAt DATETIME(3) NOT NULL,
           updatedAt DATETIME(3) NOT NULL,
           PRIMARY KEY (id)
         )`);
+        // Ensure missing columns exist for older databases
+        try {
+          const cols: any = await prisma.$queryRawUnsafe(`PRAGMA table_info(Settings)`);
+          const names = Array.isArray(cols) ? cols.map((c: any) => String(c.name || c['name']).toLowerCase()) : [];
+          const ensure = async (col: string, def: string) => {
+            if (!names.includes(col.toLowerCase())) {
+              await prisma.$executeRawUnsafe(`ALTER TABLE Settings ADD COLUMN ${col} ${def}`);
+              names.push(col.toLowerCase());
+            }
+          };
+          await ensure('intimateEventTitle', 'VARCHAR(191) NULL');
+          await ensure('intimateEventQuota', 'INT NULL');
+        } catch {}
       } catch {}
       const rows: any = await prisma.$queryRawUnsafe(`SELECT * FROM Settings ORDER BY updatedAt DESC LIMIT 1`);
       if (Array.isArray(rows) && rows.length) { const clone = safeClone(rows[0]); const now = Date.now(); settingsCache = { value: clone, expireAt: now + SETTINGS_CACHE_TTL_MS, setAt: now }; return res.json(clone); }
@@ -2663,6 +2931,9 @@ router.put('/settings', adminAuth, async (req, res) => {
     if (typeof body.xenditWebhookToken !== 'undefined') patch.xenditWebhookToken = body.xenditWebhookToken ? String(body.xenditWebhookToken) : null;
     if (typeof body.xenditEnvironment !== 'undefined') patch.xenditEnvironment = String(body.xenditEnvironment);
     if (typeof body.maintenanceMode !== 'undefined') patch.maintenanceMode = toBool(body.maintenanceMode);
+    // Custom app settings
+    if (typeof body.intimateEventTitle !== 'undefined') patch.intimateEventTitle = body.intimateEventTitle ? String(body.intimateEventTitle) : null;
+    if (typeof body.intimateEventQuota !== 'undefined') { const v = toInt(body.intimateEventQuota); if (typeof v !== 'undefined') patch.intimateEventQuota = v; }
     if (typeof body.announcement !== 'undefined') patch.announcement = body.announcement ? String(body.announcement) : null;
 
     // Validate payload with Zod
@@ -2708,12 +2979,27 @@ router.put('/settings', adminAuth, async (req, res) => {
           xenditPublicKey VARCHAR(255) NULL,
           xenditWebhookToken VARCHAR(255) NULL,
           xenditEnvironment VARCHAR(16) NOT NULL DEFAULT 'test',
+          intimateEventTitle VARCHAR(191) NULL,
+          intimateEventQuota INT NULL,
           maintenanceMode BOOLEAN NOT NULL DEFAULT false,
           announcement TEXT NULL,
           createdAt DATETIME(3) NOT NULL,
           updatedAt DATETIME(3) NOT NULL,
           PRIMARY KEY (id)
         )`);
+        // Ensure missing columns exist for older databases
+        try {
+          const cols: any = await prisma.$queryRawUnsafe(`PRAGMA table_info(Settings)`);
+          const names = Array.isArray(cols) ? cols.map((c: any) => String(c.name || c['name']).toLowerCase()) : [];
+          const ensure = async (col: string, def: string) => {
+            if (!names.includes(col.toLowerCase())) {
+              await prisma.$executeRawUnsafe(`ALTER TABLE Settings ADD COLUMN ${col} ${def}`);
+              names.push(col.toLowerCase());
+            }
+          };
+          await ensure('intimateEventTitle', 'VARCHAR(191) NULL');
+          await ensure('intimateEventQuota', 'INT NULL');
+        } catch {}
       } catch {}
       const rows: any = await prisma.$queryRawUnsafe(`SELECT * FROM Settings ORDER BY updatedAt DESC LIMIT 1`);
       const now = new Date();
@@ -2735,10 +3021,12 @@ router.put('/settings', adminAuth, async (req, res) => {
           cloudinaryEnabled: typeof patch.cloudinaryEnabled !== 'undefined' ? patch.cloudinaryEnabled : Boolean(curr.cloudinaryEnabled ?? false),
           cloudinaryFolder: typeof patch.cloudinaryFolder !== 'undefined' ? patch.cloudinaryFolder : (curr.cloudinaryFolder ?? null),
           webhookUrl: typeof patch.webhookUrl !== 'undefined' ? patch.webhookUrl : (curr.webhookUrl ?? null),
+          intimateEventTitle: typeof patch.intimateEventTitle !== 'undefined' ? patch.intimateEventTitle : (curr.intimateEventTitle ?? null),
+          intimateEventQuota: typeof patch.intimateEventQuota !== 'undefined' ? patch.intimateEventQuota : (curr.intimateEventQuota ?? null),
           maintenanceMode: typeof patch.maintenanceMode !== 'undefined' ? patch.maintenanceMode : Boolean(curr.maintenanceMode ?? false),
           announcement: typeof patch.announcement !== 'undefined' ? patch.announcement : (curr.announcement ?? null),
         };
-        await prisma.$executeRaw`UPDATE Settings SET appName=${final.appName}, defaultLocale=${final.defaultLocale}, timeZone=${final.timeZone}, primaryColor=${final.primaryColor}, darkMode=${final.darkMode}, logoUrl=${final.logoUrl}, require2FA=${final.require2FA}, sessionTimeout=${final.sessionTimeout}, allowDirectLogin=${final.allowDirectLogin}, fromName=${final.fromName}, fromEmail=${final.fromEmail}, emailProvider=${final.emailProvider}, cloudinaryEnabled=${final.cloudinaryEnabled}, cloudinaryFolder=${final.cloudinaryFolder}, webhookUrl=${final.webhookUrl}, maintenanceMode=${final.maintenanceMode}, announcement=${final.announcement}, updatedAt=${now} WHERE id=${curr.id}`;
+        await prisma.$executeRaw`UPDATE Settings SET appName=${final.appName}, defaultLocale=${final.defaultLocale}, timeZone=${final.timeZone}, primaryColor=${final.primaryColor}, darkMode=${final.darkMode}, logoUrl=${final.logoUrl}, require2FA=${final.require2FA}, sessionTimeout=${final.sessionTimeout}, allowDirectLogin=${final.allowDirectLogin}, fromName=${final.fromName}, fromEmail=${final.fromEmail}, emailProvider=${final.emailProvider}, cloudinaryEnabled=${final.cloudinaryEnabled}, cloudinaryFolder=${final.cloudinaryFolder}, webhookUrl=${final.webhookUrl}, intimateEventTitle=${final.intimateEventTitle}, intimateEventQuota=${final.intimateEventQuota}, maintenanceMode=${final.maintenanceMode}, announcement=${final.announcement}, updatedAt=${now} WHERE id=${curr.id}`;
         const updated: any = await prisma.$queryRaw`SELECT * FROM Settings WHERE id = ${curr.id}`;
         settingsCache = { value: null, expireAt: 0, setAt: 0 };
         return res.json(Array.isArray(updated) ? updated[0] : updated);
@@ -2760,11 +3048,13 @@ router.put('/settings', adminAuth, async (req, res) => {
           cloudinaryEnabled: false,
           cloudinaryFolder: null,
           webhookUrl: null,
+          intimateEventTitle: 'Climate Coustic 2.0',
+          intimateEventQuota: 100,
           maintenanceMode: false,
           announcement: null,
         } as any;
         const final = { ...defaults, ...patch };
-        await prisma.$executeRaw`INSERT INTO Settings (id, appName, defaultLocale, timeZone, primaryColor, darkMode, logoUrl, require2FA, sessionTimeout, allowDirectLogin, fromName, fromEmail, emailProvider, cloudinaryEnabled, cloudinaryFolder, webhookUrl, maintenanceMode, announcement, createdAt, updatedAt) VALUES (${id}, ${final.appName}, ${final.defaultLocale}, ${final.timeZone}, ${final.primaryColor}, ${final.darkMode}, ${final.logoUrl}, ${final.require2FA}, ${final.sessionTimeout}, ${final.allowDirectLogin}, ${final.fromName}, ${final.fromEmail}, ${final.emailProvider}, ${final.cloudinaryEnabled}, ${final.cloudinaryFolder}, ${final.webhookUrl}, ${final.maintenanceMode}, ${final.announcement}, ${now}, ${now})`;
+        await prisma.$executeRaw`INSERT INTO Settings (id, appName, defaultLocale, timeZone, primaryColor, darkMode, logoUrl, require2FA, sessionTimeout, allowDirectLogin, fromName, fromEmail, emailProvider, cloudinaryEnabled, cloudinaryFolder, webhookUrl, intimateEventTitle, intimateEventQuota, maintenanceMode, announcement, createdAt, updatedAt) VALUES (${id}, ${final.appName}, ${final.defaultLocale}, ${final.timeZone}, ${final.primaryColor}, ${final.darkMode}, ${final.logoUrl}, ${final.require2FA}, ${final.sessionTimeout}, ${final.allowDirectLogin}, ${final.fromName}, ${final.fromEmail}, ${final.emailProvider}, ${final.cloudinaryEnabled}, ${final.cloudinaryFolder}, ${final.webhookUrl}, ${final.intimateEventTitle}, ${final.intimateEventQuota}, ${final.maintenanceMode}, ${final.announcement}, ${now}, ${now})`;
         const created: any = await prisma.$queryRaw`SELECT * FROM Settings WHERE id = ${id}`;
         settingsCache = { value: null, expireAt: 0, setAt: 0 };
         return res.json(Array.isArray(created) ? created[0] : created);
@@ -3066,22 +3356,29 @@ router.post('/upload/slider-image', adminAuth, upload.single('image'), async (re
 
     let imageUrl: string;
 
-    if (cloudinary.config().cloud_name) {
-      // Upload to Cloudinary
+    // Gunakan Cloudinary hanya jika kredensial lengkap (cloudName, apiKey, apiSecret)
+    const hasFullCloudinaryCreds = Boolean(
+      (config as any)?.cloudinary?.cloudName &&
+      (config as any)?.cloudinary?.apiKey &&
+      (config as any)?.cloudinary?.apiSecret
+    );
+
+    if (hasFullCloudinaryCreds) {
+      // Upload ke Cloudinary
       const result = await cloudinary.uploader.upload(
         `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`,
         { folder: 'thelodge/slider' }
       );
       imageUrl = result.secure_url;
     } else {
-      // Upload to local storage
+      // Fallback: simpan lokal
       const uploadsDir = path.join(process.cwd(), 'uploads');
       try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
-      
+
       const filename = `slider_${Date.now()}_${Math.random().toString(36).slice(2)}.${(req.file.originalname.split('.').pop() || 'jpg')}`;
       const filepath = path.join(uploadsDir, filename);
       fs.writeFileSync(filepath, req.file.buffer);
-      
+
       const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
       imageUrl = `${baseUrl}/files/uploads/${filename}`;
     }

@@ -1883,6 +1883,51 @@ router.post('/redeem', adminAuth, async (req, res) => {
       await prisma.redeemHistory.create({ data: { memberId, memberName, voucherType, voucherId, voucherLabel, redeemedAt, adminId, adminName, proofUrl } });
       return res.json({ success: true, ticket: updated, proofUrl });
     }
+    if (payload.type === 'points') {
+      const pr = await prisma.pointRedemption.findUnique({ where: { id: payload.redemptionId } });
+      if (!pr || pr.memberId !== payload.memberId) return res.status(404).json({ message: 'Redemption not found' });
+      if (pr.status === RedemptionStatus.REDEEMED) return res.status(400).json({ message: 'Already redeemed' });
+      const updated = await prisma.pointRedemption.update({ where: { id: pr.id }, data: { status: RedemptionStatus.REDEEMED, redeemedAt } });
+      const member = await prisma.member.findUnique({ where: { id: pr.memberId } });
+      memberName = member?.fullName || '';
+      voucherType = 'POINTS' as any;
+      voucherId = pr.id;
+      voucherLabel = pr.rewardName;
+      const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
+      const qrUrl = data && hash ? `${baseUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}` : `${baseUrl}/api/verify?friendlyCode=${pr.friendlyCode}`;
+      const qrDataURL = await generateQRDataURL(qrUrl);
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'redeem-proofs');
+      try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
+      const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
+      const outputPath = path.join(uploadsDir, filename);
+      await createRedeemProofPDF({ outputPath, memberName, voucherType: 'Redeem Poin', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
+      const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
+      await prisma.redeemHistory.create({ data: { memberId, memberName, voucherType, voucherId, voucherLabel, redeemedAt, adminId, adminName, proofUrl } });
+      return res.json({ success: true, redemption: updated, proofUrl });
+    }
+    if (payload.type === 'event') {
+      const er = await prisma.eventRegistration.findUnique({ where: { id: payload.registrationId } });
+      if (!er || er.memberId !== payload.memberId || er.eventId !== payload.eventId) return res.status(404).json({ message: 'Registration not found' });
+      if (er.status === RegistrationStatus.REDEEMED) return res.status(400).json({ message: 'Already redeemed' });
+      const updated = await prisma.eventRegistration.update({ where: { id: er.id }, data: { status: RegistrationStatus.REDEEMED, redeemedAt } });
+      const member = await prisma.member.findUnique({ where: { id: er.memberId } });
+      const ev = await prisma.event.findUnique({ where: { id: er.eventId } });
+      memberName = member?.fullName || '';
+      voucherType = 'EVENT' as any;
+      voucherId = er.id;
+      voucherLabel = ev?.title;
+      const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
+      const qrUrl = data && hash ? `${baseUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}` : `${baseUrl}/api/verify?friendlyCode=${er.friendlyCode}`;
+      const qrDataURL = await generateQRDataURL(qrUrl);
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'redeem-proofs');
+      try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
+      const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
+      const outputPath = path.join(uploadsDir, filename);
+      await createRedeemProofPDF({ outputPath, memberName, voucherType: 'Event Eksklusif Member', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
+      const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
+      await prisma.redeemHistory.create({ data: { memberId, memberName, voucherType, voucherId, voucherLabel, redeemedAt, adminId, adminName, proofUrl } });
+      return res.json({ success: true, registration: updated, proofUrl });
+    }
     if (payload.type === 'tourism_ticket') {
       const tb = await prisma.tourismTicketBooking.findUnique({ where: { id: payload.bookingId } });
       if (!tb) return res.status(404).json({ message: 'Tourism booking not found' });
@@ -1938,51 +1983,6 @@ router.post('/redeem', adminAuth, async (req, res) => {
         // Do not fail the redemption if notification fails
       }
       return res.json({ success: true, benefitRedemption: updated, proofUrl });
-    }
-    if (payload.type === 'points') {
-      const pr = await prisma.pointRedemption.findUnique({ where: { id: payload.redemptionId } });
-      if (!pr || pr.memberId !== payload.memberId) return res.status(404).json({ message: 'Redemption not found' });
-      if (pr.status === RedemptionStatus.REDEEMED) return res.status(400).json({ message: 'Already redeemed' });
-      const updated = await prisma.pointRedemption.update({ where: { id: pr.id }, data: { status: RedemptionStatus.REDEEMED, redeemedAt } });
-      const member = await prisma.member.findUnique({ where: { id: pr.memberId } });
-      memberName = member?.fullName || '';
-      voucherType = 'POINTS' as any;
-      voucherId = pr.id;
-      voucherLabel = pr.rewardName;
-      const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
-      const qrUrl = data && hash ? `${baseUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}` : `${baseUrl}/api/verify?friendlyCode=${pr.friendlyCode}`;
-      const qrDataURL = await generateQRDataURL(qrUrl);
-      const uploadsDir = path.join(process.cwd(), 'uploads', 'redeem-proofs');
-      try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
-      const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
-      const outputPath = path.join(uploadsDir, filename);
-      await createRedeemProofPDF({ outputPath, memberName, voucherType: 'Redeem Poin', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
-      const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
-      await prisma.redeemHistory.create({ data: { memberId, memberName, voucherType, voucherId, voucherLabel, redeemedAt, adminId, adminName, proofUrl } });
-      return res.json({ success: true, redemption: updated, proofUrl });
-    }
-    if (payload.type === 'event') {
-      const er = await prisma.eventRegistration.findUnique({ where: { id: payload.registrationId } });
-      if (!er || er.memberId !== payload.memberId || er.eventId !== payload.eventId) return res.status(404).json({ message: 'Registration not found' });
-      if (er.status === RegistrationStatus.REDEEMED) return res.status(400).json({ message: 'Already redeemed' });
-      const updated = await prisma.eventRegistration.update({ where: { id: er.id }, data: { status: RegistrationStatus.REDEEMED, redeemedAt } });
-      const member = await prisma.member.findUnique({ where: { id: er.memberId } });
-      const ev = await prisma.event.findUnique({ where: { id: er.eventId } });
-      memberName = member?.fullName || '';
-      voucherType = 'EVENT' as any;
-      voucherId = er.id;
-      voucherLabel = ev?.title;
-      const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
-      const qrUrl = data && hash ? `${baseUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}` : `${baseUrl}/api/verify?friendlyCode=${er.friendlyCode}`;
-      const qrDataURL = await generateQRDataURL(qrUrl);
-      const uploadsDir = path.join(process.cwd(), 'uploads', 'redeem-proofs');
-      try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
-      const filename = `redeem_${voucherId}_${Date.now()}.pdf`;
-      const outputPath = path.join(uploadsDir, filename);
-      await createRedeemProofPDF({ outputPath, memberName, voucherType: 'Event Eksklusif Member', voucherLabel, redeemedAt, qrDataUrl: qrDataURL, adminName, companyName: 'The Lodge Family' });
-      const proofUrl = `${baseUrl}/files/uploads/redeem-proofs/${filename}`;
-      await prisma.redeemHistory.create({ data: { memberId, memberName, voucherType, voucherId, voucherLabel, redeemedAt, adminId, adminName, proofUrl } });
-      return res.json({ success: true, registration: updated, proofUrl });
     }
     return res.status(400).json({ message: 'Unknown payload type' });
   } catch (e) {
@@ -2060,6 +2060,9 @@ router.post('/promos', adminAuth, upload.single('image'), async (req: any, res) 
       if (quota) data.quota = parseInt(quota, 10);
       if (eventId) data.eventId = String(eventId);
     }
+    if (type === 'BIRTHDAY_GIFT') {
+      if (quota) data.quota = parseInt(quota, 10);
+    }
     if (type === 'FREE_BENEFIT_NEW_REG') {
       if (quota) data.quota = parseInt(quota, 10);
       if (maxRedeem) data.maxRedeem = parseInt(maxRedeem, 10);
@@ -2098,6 +2101,9 @@ router.put('/promos/:id', adminAuth, upload.single('image'), async (req: any, re
       if (maxRedeem) data.maxRedeem = parseInt(maxRedeem, 10);
     }
     if (type === 'EVENT' || type === 'EXCLUSIVE_MEMBER') {
+      if (quota) data.quota = parseInt(quota, 10);
+    }
+    if (type === 'BIRTHDAY_GIFT') {
       if (quota) data.quota = parseInt(quota, 10);
     }
     if (type === 'FREE_BENEFIT_NEW_REG') {
@@ -3060,22 +3066,29 @@ router.post('/upload/slider-image', adminAuth, upload.single('image'), async (re
 
     let imageUrl: string;
 
-    if (cloudinary.config().cloud_name) {
-      // Upload to Cloudinary
+    // Gunakan Cloudinary hanya jika kredensial lengkap (cloudName, apiKey, apiSecret)
+    const hasFullCloudinaryCreds = Boolean(
+      (config as any)?.cloudinary?.cloudName &&
+      (config as any)?.cloudinary?.apiKey &&
+      (config as any)?.cloudinary?.apiSecret
+    );
+
+    if (hasFullCloudinaryCreds) {
+      // Upload ke Cloudinary
       const result = await cloudinary.uploader.upload(
         `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`,
         { folder: 'thelodge/slider' }
       );
       imageUrl = result.secure_url;
     } else {
-      // Upload to local storage
+      // Fallback: simpan lokal
       const uploadsDir = path.join(process.cwd(), 'uploads');
       try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
-      
+
       const filename = `slider_${Date.now()}_${Math.random().toString(36).slice(2)}.${(req.file.originalname.split('.').pop() || 'jpg')}`;
       const filepath = path.join(uploadsDir, filename);
       fs.writeFileSync(filepath, req.file.buffer);
-      
+
       const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
       imageUrl = `${baseUrl}/files/uploads/${filename}`;
     }

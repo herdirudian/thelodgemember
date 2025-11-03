@@ -563,3 +563,20 @@ enum PromoVoucherStatus {
   USED
   EXPIRED
 }
+
+// Public registration for events without login
+model PublicRegistration {
+  id        Int      @id @default(autoincrement())
+  eventName String
+  name      String
+  email     String
+  phone     String
+  friendlyCode String? @unique
+  qrPayloadHash String?
+  createdAt DateTime @default(now())
+
+  @@unique([eventName, email])
+  @@unique([eventName, phone])
+  @@index([eventName])
+  @@index([friendlyCode])
+}

@@ -21,7 +21,8 @@ type AdminNavProps = {
     | "registration-codes"
     | "tourism-tickets"
     | "accommodation"
-    | "notifications";
+    | "notifications"
+    | "public-registrations";
 };
 
 export default function AdminNav({ active = "overview" }: AdminNavProps) {
@@ -70,6 +71,7 @@ export default function AdminNav({ active = "overview" }: AdminNavProps) {
             {item("activities", "Activities", "/admin#activities")}
             {item("member-activities", "Member Activities", "/admin#member-activities")}
             {item("notifications", "Notifikasi", "/admin#notifications")}
+            {item("public-registrations", "Pendaftar Intimate", "/admin#public-registrations")}
             {item("admins", "Admins", "/admin#admins")}
             {item("settings", "Settings", "/admin#settings")}
             {item("analytics", "Analytics", "/admin#analytics")}

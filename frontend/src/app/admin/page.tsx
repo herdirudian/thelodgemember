@@ -17,6 +17,7 @@ import AdminVouchers from '@/components/AdminVouchers';
 import AdminRedeemVoucher from '@/components/AdminRedeemVoucher';
 import AdminMemberTickets from '@/components/AdminMemberTickets';
 import AdminAnalytics from '@/components/AdminAnalytics';
+import AdminPublicRegistrations from '@/components/AdminPublicRegistrations';
 import AdminTourismTickets from '@/components/AdminTourismTickets';
 import AdminAccommodation from '@/components/AdminAccommodation';
 import AdminNotifications from '@/components/AdminNotifications';
@@ -33,10 +34,10 @@ export default function AdminPage() {
 }
 
 function AdminRoot() {
-  const [menu, setMenu] = useState<'overview' | 'members' | 'points' | 'promos' | 'benefits' | 'slider' | 'vouchers' | 'redeem-voucher' | 'member-tickets' | 'activities' | 'member-activities' | 'admins' | 'settings' | 'events' | 'analytics' | 'registration-codes' | 'tourism-tickets' | 'accommodation' | 'notifications'>('overview');
+  const [menu, setMenu] = useState<'overview' | 'members' | 'points' | 'promos' | 'benefits' | 'slider' | 'vouchers' | 'redeem-voucher' | 'member-tickets' | 'activities' | 'member-activities' | 'admins' | 'settings' | 'events' | 'analytics' | 'registration-codes' | 'tourism-tickets' | 'accommodation' | 'notifications' | 'public-registrations'>('overview');
   
   useEffect(() => {
-    const allowed = new Set(['overview', 'members', 'points', 'promos', 'benefits', 'slider', 'vouchers', 'redeem-voucher', 'member-tickets', 'activities', 'member-activities', 'admins', 'settings', 'events', 'analytics', 'registration-codes', 'tourism-tickets', 'accommodation', 'notifications']);
+    const allowed = new Set(['overview', 'members', 'points', 'promos', 'benefits', 'slider', 'vouchers', 'redeem-voucher', 'member-tickets', 'activities', 'member-activities', 'admins', 'settings', 'events', 'analytics', 'registration-codes', 'tourism-tickets', 'accommodation', 'notifications', 'public-registrations']);
     const syncFromHash = () => {
       try {
         const h = (window.location.hash || '#overview').replace('#', '');
@@ -67,6 +68,7 @@ function AdminRoot() {
         {menu === 'redeem-voucher' && <AdminRedeemVoucher />}
         {menu === 'member-tickets' && <AdminMemberTickets />}
         {menu === 'registration-codes' && <AdminRegistrationCodes />}
+        {menu === 'public-registrations' && <AdminPublicRegistrations />}
         {menu === 'activities' && <AdminActivities />}
         {menu === 'member-activities' && <AdminMemberActivities />}
         {menu === 'notifications' && <AdminNotifications />}

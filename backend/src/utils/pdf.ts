@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
+import QRCode from 'qrcode';
 // @ts-ignore - no types for svg-to-pdfkit
 const SVGtoPDF = require('svg-to-pdfkit');
 
@@ -98,7 +99,7 @@ export function createMembershipCardPDF(options: {
 }
 
 // Bukti Redeem Voucher (A4)
-export function createRedeemProofPDF(options: {
+export async function createRedeemProofPDF(options: {
   outputPath: string;
   logoPath?: string;
   companyName?: string;
@@ -109,11 +110,10 @@ export function createRedeemProofPDF(options: {
   qrDataUrl: string;
   adminName: string;
 }): Promise<void> {
-  return new Promise((resolve, reject) => {
-    try {
-      const doc = new PDFDocument({ size: 'A4', margin: 50 });
-      const stream = fs.createWriteStream(options.outputPath);
-      doc.pipe(stream);
+  try {
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const stream = fs.createWriteStream(options.outputPath);
+    doc.pipe(stream);
 
       const company = options.companyName || 'The Lodge Family';
       // Header
@@ -140,26 +140,39 @@ export function createRedeemProofPDF(options: {
       doc.text(`Tanggal & Waktu   : ${options.redeemedAt.toLocaleString('id-ID')}`);
       doc.text(`Verifikasi oleh   : ${options.adminName}`);
 
-      // QR code (hasil digunakan)
-      const qrBase64 = options.qrDataUrl.split(',')[1];
-      const qrBuffer = Buffer.from(qrBase64, 'base64');
-      const qrPath = path.join(path.dirname(options.outputPath), `qr-proof-${Date.now()}.png`);
-      try { fs.writeFileSync(qrPath, qrBuffer); } catch {}
-      try { doc.image(qrPath, doc.page.width - 170, 120, { width: 120, height: 120 }); } catch {}
+    // QR code (hasil digunakan) — lebih robust terhadap input non-data URL
+    let qrDataUrl = options.qrDataUrl;
+    if (!qrDataUrl || !qrDataUrl.startsWith('data:')) {
+      try {
+        qrDataUrl = await QRCode.toDataURL(qrDataUrl || '');
+      } catch {}
+    }
 
-      doc.end();
-      
+    let qrPath: string | undefined;
+    try {
+      const commaIndex = qrDataUrl.indexOf(',');
+      if (commaIndex !== -1) {
+        const qrBase64 = qrDataUrl.substring(commaIndex + 1);
+        const qrBuffer = Buffer.from(qrBase64, 'base64');
+        qrPath = path.join(path.dirname(options.outputPath), `qr-proof-${Date.now()}.png`);
+        try { fs.writeFileSync(qrPath, qrBuffer); } catch {}
+        try { doc.image(qrPath, doc.page.width - 170, 120, { width: 120, height: 120 }); } catch {}
+      }
+    } catch {}
+
+    doc.end();
+
+    await new Promise<void>((resolve, reject) => {
       stream.on('finish', () => {
-        try { fs.unlinkSync(qrPath); } catch {}
+        try { if (qrPath) fs.unlinkSync(qrPath); } catch {}
         resolve();
       });
-      
       stream.on('error', (error) => {
-        try { fs.unlinkSync(qrPath); } catch {}
+        try { if (qrPath) fs.unlinkSync(qrPath); } catch {}
         reject(error);
       });
-    } catch (error) {
-      reject(error);
-    }
-  });
+    });
+  } catch (error) {
+    throw error;
+  }
 }

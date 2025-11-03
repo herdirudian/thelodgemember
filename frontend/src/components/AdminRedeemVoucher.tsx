@@ -592,25 +592,141 @@ export default function AdminRedeemVoucher() {
   const handleQRScan = async (qrData: string) => {
     setQRScannerLoading(true);
     setError("");
-    
+
     try {
-      // Parse QR data
-      const memberQRData = JSON.parse(qrData);
-      
-      if (memberQRData.type !== 'MEMBER_QR') {
-        throw new Error('QR Code bukan QR Code member yang valid');
+      // Coba parse sebagai JSON untuk QR member
+      try {
+        const memberQRData = JSON.parse(qrData);
+        if (memberQRData && memberQRData.type === 'MEMBER_QR' && memberQRData.memberId) {
+          // Load tiket member
+          await loadMemberTickets(memberQRData.memberId);
+          setScannedMember(memberQRData);
+          setShowQRScanner(false);
+          setShowMemberTicketsModal(true);
+          setQRScannerLoading(false);
+          return;
+        }
+        // Jika JSON tapi bukan MEMBER_QR, lanjut ke penanganan voucher
+      } catch {
+        // Bukan JSON, lanjut ke penanganan voucher
       }
 
-      // Load member tickets
-      await loadMemberTickets(memberQRData.memberId);
-      setScannedMember(memberQRData);
+      // Penanganan QR voucher pra-registrasi: bisa berupa URL /api/verify atau kode sederhana
+      let codeToRedeem = qrData.trim();
+      let dataParam: string | undefined;
+      let hashParam: string | undefined;
+
+      // Jika bentuk URL, ekstrak friendlyCode atau data+hash
+      if (codeToRedeem.startsWith('http') || codeToRedeem.includes('/api/verify')) {
+        try {
+          const urlObj = new URL(codeToRedeem);
+          const friendly = urlObj.searchParams.get('friendlyCode') || undefined;
+          const data = urlObj.searchParams.get('data') || undefined;
+          const hash = urlObj.searchParams.get('hash') || undefined;
+          if (friendly) {
+            codeToRedeem = friendly.toUpperCase();
+          } else if (data && hash) {
+            dataParam = data;
+            hashParam = hash;
+          }
+        } catch {
+          // Jika bukan URL valid, tetap perlakukan sebagai kode mentah
+        }
+      }
+
+      const token = localStorage.getItem("token");
+
+      // Jika ada data+hash (QR tradisional), gunakan endpoint /redeem
+      if (dataParam && hashParam) {
+        const response = await fetch(`/api/admin/redeem`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ data: dataParam, hash: hashParam })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Gagal redeem voucher dari QR");
+        }
+
+        const result = await response.json();
+        const printDataForReceipt = {
+          receiptNumber: `RCP-${Date.now()}`,
+          memberName: result.memberName || (result.publicRegistration?.name || 'Pengunjung'),
+          memberId: result.memberId || '',
+          voucherName: result.voucherName || (result.registration?.eventName || 'Pra-Registrasi Publik'),
+          voucherType: result.voucherType || 'Voucher',
+          redeemDate: new Date().toLocaleDateString('id-ID', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          }),
+          adminName: 'Admin',
+          qrCode: result.qrCode || `REDEEM-QR`,
+          details: result.details || result.registration || result.ticket || result.redemption || result.benefitRedemption || result.booking
+        };
+
+        setPrintData(printDataForReceipt);
+        setShowPrintModal(true);
+        setSuccess(`Voucher berhasil di-redeem melalui QR!`);
+        setShowQRScanner(false);
+        loadData();
+        setQRScannerLoading(false);
+        return;
+      }
+
+      // Jika tidak ada data+hash, gunakan kode mentah via endpoint redeem-by-code
+      if (!codeToRedeem) {
+        throw new Error('QR tidak berisi data yang dapat diproses');
+      }
+
+      const response = await fetch(`/api/admin/redeem-by-code`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ voucherCode: codeToRedeem })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Gagal redeem voucher dari kode");
+      }
+
+      const result = await response.json();
+      const printDataForReceipt = {
+        receiptNumber: `RCP-${Date.now()}`,
+        memberName: result.memberName,
+        memberId: result.memberId,
+        voucherName: result.voucherName,
+        voucherType: result.voucherType,
+        redeemDate: new Date().toLocaleDateString('id-ID', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }),
+        adminName: 'Admin',
+        qrCode: result.qrCode || `REDEEM-${codeToRedeem}`,
+        details: result.details
+      };
+
+      setPrintData(printDataForReceipt);
+      setShowPrintModal(true);
+      setSuccess(`Voucher berhasil di-redeem melalui QR!`);
       setShowQRScanner(false);
-      setShowMemberTicketsModal(true);
-      
+      loadData();
     } catch (e: any) {
-      setError(e?.message || "QR Code tidak valid atau gagal memuat data member");
+      setError(e?.message || "QR Code tidak valid atau gagal memproses");
     }
-    
+
     setQRScannerLoading(false);
   };
 

@@ -255,6 +255,7 @@ enum PromoType {
   EXCLUSIVE_MEMBER
   FREE_BENEFIT_NEW_REG
   EVENT
+  BIRTHDAY_GIFT
 }
 
 model AdminActivity {

@@ -9,6 +9,7 @@ import memberRouter from './routes/member';
 
 console.log('🔍 Importing admin router...');
 import adminRouter from './routes/admin';
+import publicRouter from './routes/public';
 console.log('🔍 Admin router imported successfully');
 import adminActivitiesRouter from './routes/admin-activities';
 import bookingRouter from './routes/booking';
@@ -75,6 +76,23 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
+// Enable CORS for local development (frontend on port 3000)
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const allowed = [
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+    ];
+    const isLocal = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+    if (allowed.includes(origin) || isLocal) return callback(null, true);
+    return callback(new Error(`Not allowed by CORS: ${origin}`));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
 // Debug middleware for body parsing
 app.use((req, res, next) => {
   console.log('🔍 BODY PARSING DEBUG:');
@@ -122,6 +140,7 @@ console.log('Member router registered successfully');
 
 console.log('🔍 Registering admin router at /api/admin');
 app.use('/api/admin', adminRouter);
+app.use('/api/public', publicRouter);
 console.log('🔍 Admin router registered successfully');
 app.use('/api/admin', adminActivitiesRouter);
 app.use('/api/booking', bookingRouter);

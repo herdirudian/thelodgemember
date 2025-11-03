@@ -33,6 +33,31 @@ app.get('/api/very-early-test', (req, res) => {
   res.json({ message: 'Very early test works!', timestamp: new Date().toISOString() });
 });
 
+// Health check endpoint placed early; use app.all to catch GET/HEAD/others
+app.all('/api/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'backend',
+    env: process.env.NODE_ENV || 'development',
+    port: process.env.PORT || 5001,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Additional safety: intercept /api/health via /api mount to ensure match
+app.use('/api', (req, res, next) => {
+  if (req.path === '/health') {
+    return res.json({
+      status: 'ok',
+      service: 'backend',
+      env: process.env.NODE_ENV || 'development',
+      port: process.env.PORT || 5001,
+      timestamp: new Date().toISOString(),
+    });
+  }
+  next();
+});
+
 // Debug middleware to log request details
 app.use((req, res, next) => {
   console.log('🚀🚀🚀 MIDDLEWARE HIT! 🚀🚀🚀');
@@ -113,6 +138,17 @@ app.get('/api', (req, res) => {
   res.json({ status: 'ok', name: 'The Lodge Family Membership API', path: '/api' });
 });
 
+// Health check endpoint untuk Actions dan monitoring
+app.get('/api/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'backend',
+    env: process.env.NODE_ENV || 'development',
+    port: process.env.PORT || 5001,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Simple test endpoint to verify Express is working
 app.get('/api/simple-test', (req, res) => {
   console.log('🔥🔥🔥 Simple test endpoint hit! 🔥🔥🔥');
@@ -127,6 +163,29 @@ app.get('/api/admin/direct-test', (req, res) => {
 app.get('/api/member/direct-test', (_req, res) => {
   console.log('Direct test endpoint hit!');
   res.json({ message: 'Direct test endpoint works!' });
+});
+
+// Debug endpoint: list registered routes
+app.get('/api/_routes', (_req, res) => {
+  const routes: any[] = [];
+  const stack = (app as any)._router?.stack || [];
+  for (const layer of stack) {
+    if (layer.route) {
+      const path = layer.route?.path;
+      const methods = layer.route?.methods ? Object.keys(layer.route.methods) : [];
+      routes.push({ type: 'route', path, methods });
+    } else if (layer.name === 'router' && layer.handle?.stack) {
+      for (const sub of layer.handle.stack) {
+        const route = sub.route;
+        if (route) {
+          const path = route.path;
+          const methods = route.methods ? Object.keys(route.methods) : [];
+          routes.push({ type: 'router', path, methods, prefix: layer.regexp?.source });
+        }
+      }
+    }
+  }
+  res.json({ count: routes.length, routes });
 });
 
 // Static files for generated membership cards

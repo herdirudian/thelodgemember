@@ -23,12 +23,14 @@ export default function RootLayout({
 }>) {
   const pathname = usePathname();
   const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/reset-password' || pathname === '/verify-reset-code';
+  // Hide sidebar specifically for the public Intimate Register page
+  const isIntimateRegisterPage = pathname === '/intimate/register';
 
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {isAuthPage ? (
-          // Layout untuk halaman auth tanpa sidebar dan chatbot
+        {isAuthPage || isIntimateRegisterPage ? (
+          // Layout tanpa sidebar (auth & intimate register)
           <div className="min-h-screen w-full bg-white">
             <main className="w-full min-h-screen">
               <div className="container mx-auto px-4 py-8">
