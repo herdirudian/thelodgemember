@@ -10,7 +10,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 5001,
-        DATABASE_URL: 'mysql://root:BI5mill4h%40%40%40@localhost:3306/lodge_family_db',
+        DATABASE_URL: 'file:/var/www/thelodgefamily/current/backend/prisma/dev.db',
         APP_URL: 'https://family.thelodgegroup.id',
         FRONTEND_URL: 'https://family.thelodgegroup.id',
         JWT_SECRET: 'change_me_please',
@@ -19,7 +19,7 @@ module.exports = {
       env_production: {
         NODE_ENV: 'production',
         PORT: 5001,
-        DATABASE_URL: 'mysql://root:BI5mill4h%40%40%40@localhost:3306/lodge_family_db',
+        DATABASE_URL: 'file:/var/www/thelodgefamily/current/backend/prisma/dev.db',
         APP_URL: 'https://family.thelodgegroup.id',
         FRONTEND_URL: 'https://family.thelodgegroup.id',
         JWT_SECRET: 'change_me_please',
