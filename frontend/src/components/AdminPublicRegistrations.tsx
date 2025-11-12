@@ -15,6 +15,7 @@ type Availability = {
   quota: number;
   registered: number;
   remaining: number;
+  closed?: boolean;
 };
 
 export default function AdminPublicRegistrations() {
@@ -32,6 +33,7 @@ export default function AdminPublicRegistrations() {
   // Settings fields
   const [intimateEventTitle, setIntimateEventTitle] = useState<string>("");
   const [intimateEventQuota, setIntimateEventQuota] = useState<string>("");
+  const [intimateEventClosed, setIntimateEventClosed] = useState<boolean>(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState<string>("");
 
@@ -60,6 +62,9 @@ export default function AdminPublicRegistrations() {
       }
       if (typeof data.intimateEventQuota !== 'undefined' && data.intimateEventQuota !== null) {
         setIntimateEventQuota(String(data.intimateEventQuota));
+      }
+      if (typeof data.intimateEventClosed !== 'undefined') {
+        setIntimateEventClosed(Boolean(data.intimateEventClosed));
       }
     } catch (e) {
       // ignore
@@ -105,6 +110,7 @@ export default function AdminPublicRegistrations() {
       const payload: any = {};
       if (intimateEventTitle.trim()) payload.intimateEventTitle = intimateEventTitle.trim();
       if (intimateEventQuota.trim()) payload.intimateEventQuota = parseInt(intimateEventQuota, 10);
+      payload.intimateEventClosed = Boolean(intimateEventClosed);
       const res = await fetch('/api/admin/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -124,6 +130,13 @@ export default function AdminPublicRegistrations() {
     } finally {
       setSavingSettings(false);
     }
+  };
+
+  const markEventClosedNow = async () => {
+    try {
+      setIntimateEventClosed(true);
+      await saveSettings();
+    } catch {}
   };
 
   const resendEvoucher = async (registrationId: string) => {
@@ -161,6 +174,15 @@ export default function AdminPublicRegistrations() {
         </div>
       </div>
 
+      {/* Banner status event berakhir */}
+      {(availability?.closed || intimateEventClosed) && (
+        <div className="p-4 rounded-lg border bg-red-50 border-red-200">
+          <div className="text-sm text-red-700">
+            Event sudah berakhir. Pendaftaran ditutup dan aksi tertentu dinonaktifkan.
+          </div>
+        </div>
+      )}
+
       {/* Info kartu kuota */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="p-4 rounded-lg border bg-white">
@@ -175,6 +197,12 @@ export default function AdminPublicRegistrations() {
           <div className="text-sm text-gray-500">Terdaftar / Sisa</div>
           <div className="text-lg font-semibold">
             {(availability?.registered ?? 0)} / {(availability?.remaining ?? Math.max(((availability?.quota ?? 0) - (availability?.registered ?? 0)), 0))}
+          </div>
+        </div>
+        <div className="p-4 rounded-lg border bg-white">
+          <div className="text-sm text-gray-500">Status</div>
+          <div className={`text-lg font-semibold ${availability?.closed || intimateEventClosed ? 'text-red-600' : 'text-green-700'}`}>
+            {availability?.closed || intimateEventClosed ? 'Acara selesai — Pendaftaran berakhir' : 'Pendaftaran masih dibuka'}
           </div>
         </div>
       </div>
@@ -202,8 +230,23 @@ export default function AdminPublicRegistrations() {
             />
           </div>
         </div>
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-gray-700">Tutup Pendaftaran (Acara selesai)</label>
+          <input
+            type="checkbox"
+            checked={intimateEventClosed}
+            onChange={(e) => setIntimateEventClosed(e.target.checked)}
+          />
+        </div>
         <div className="flex items-center gap-2">
           <button disabled={savingSettings} onClick={saveSettings} className="px-4 py-2 bg-[#0F4D39] text-white rounded-md disabled:opacity-60">{savingSettings ? 'Menyimpan...' : 'Simpan Pengaturan'}</button>
+          {!intimateEventClosed && !availability?.closed && (
+            <button
+              disabled={savingSettings}
+              onClick={markEventClosedNow}
+              className="px-4 py-2 bg-red-600 text-white rounded-md disabled:opacity-60"
+            >Tandai Event Selesai</button>
+          )}
           {settingsMessage && <span className="text-sm text-gray-600">{settingsMessage}</span>}
         </div>
       </div>
@@ -237,9 +280,10 @@ export default function AdminPublicRegistrations() {
                   <td className="px-4 py-2 text-sm">
                     <button
                       onClick={() => resendEvoucher(r.id)}
-                      disabled={sendingId === r.id}
-                      className="px-3 py-1 bg-[#0F4D39] text-white rounded-md disabled:opacity-50"
-                    >{sendingId === r.id ? 'Mengirim…' : 'Kirim ulang e‑voucher'}</button>
+                      disabled={sendingId === r.id || intimateEventClosed || availability?.closed}
+                      title={(intimateEventClosed || availability?.closed) ? 'Event ditutup' : ''}
+                      className={`px-3 py-1 rounded-md ${sendingId === r.id || intimateEventClosed || availability?.closed ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-[#0F4D39] text-white'}`}
+                    >{sendingId === r.id ? 'Mengirim…' : (intimateEventClosed || availability?.closed ? 'Ditutup' : 'Kirim ulang e‑voucher')}</button>
                   </td>
                 </tr>
               ))}

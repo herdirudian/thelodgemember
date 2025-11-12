@@ -2,9 +2,11 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5001';
-
 export default function IntimateRegisterPage() {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  // Gunakan NEXT_PUBLIC_API_URL jika tersedia; hapus suffix /api agar tidak double
+  const rawApi = (process.env.NEXT_PUBLIC_API_URL as string | undefined) || origin || '';
+  const apiBase = rawApi ? rawApi.replace(/\/api\/?$/, '') : origin || '';
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -16,7 +18,7 @@ export default function IntimateRegisterPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [availability, setAvailability] = useState<{ event: string; quota: number; registered: number; remaining: number } | null>(null);
+  const [availability, setAvailability] = useState<{ event: string; quota: number; registered: number; remaining: number; closed?: boolean } | null>(null);
   const [emailVerified, setEmailVerified] = useState(false);
   const [emailVerificationCode, setEmailVerificationCode] = useState('');
   const [emailVerifySending, setEmailVerifySending] = useState(false);
@@ -27,12 +29,25 @@ export default function IntimateRegisterPage() {
   useEffect(() => {
     const fetchAvailability = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/public/intimate/register/availability`);
+        const res = await fetch(`${apiBase}/api/public/intimate/register/availability`);
         const data = await res.json();
         if (res.ok) setAvailability(data);
       } catch {}
     };
     fetchAvailability();
+
+    // Ping API health untuk deteksi dini konektivitas di VPS
+    const pingHealth = async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/health`);
+        if (!res.ok) throw new Error('Health check gagal');
+      } catch (e: any) {
+        setError(
+          `Tidak dapat menghubungi API (${apiBase}/api). Periksa koneksi VPS, port proxy Nginx, atau CORS.`
+        );
+      }
+    };
+    pingHealth();
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -56,7 +71,7 @@ export default function IntimateRegisterPage() {
     setMessage(null);
     setEmailVerifyMsg(null);
     try {
-      const res = await fetch(`${API_BASE}/api/send-email-verification`, {
+      const res = await fetch(`${apiBase}/api/send-email-verification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: form.email, fullName: form.name || undefined }),
@@ -67,7 +82,10 @@ export default function IntimateRegisterPage() {
       }
       setEmailVerifyMsg('Kode verifikasi telah dikirim ke email Anda.');
     } catch (err: any) {
-      setError(err?.message || 'Terjadi kesalahan saat mengirim kode verifikasi');
+      const msg = err?.message === 'Failed to fetch'
+        ? `Tidak dapat menghubungi server. Pastikan API tersedia di ${apiBase}/api dan koneksi internet stabil.`
+        : (err?.message || 'Terjadi kesalahan saat mengirim kode verifikasi');
+      setError(msg);
     } finally {
       setEmailVerifySending(false);
     }
@@ -82,7 +100,7 @@ export default function IntimateRegisterPage() {
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch(`${API_BASE}/api/verify-email-code`, {
+      const res = await fetch(`${apiBase}/api/verify-email-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: form.email, verificationCode: emailVerificationCode }),
@@ -94,7 +112,10 @@ export default function IntimateRegisterPage() {
       setEmailVerified(true);
       setEmailVerifyMsg('Email berhasil diverifikasi.');
     } catch (err: any) {
-      setError(err?.message || 'Terjadi kesalahan saat verifikasi email');
+      const msg = err?.message === 'Failed to fetch'
+        ? `Tidak dapat menghubungi server. Pastikan API tersedia di ${apiBase}/api dan koneksi internet stabil.`
+        : (err?.message || 'Terjadi kesalahan saat verifikasi email');
+      setError(msg);
     } finally {
       setEmailVerifyChecking(false);
     }
@@ -105,13 +126,18 @@ export default function IntimateRegisterPage() {
     setLoading(true);
     setMessage(null);
     setError(null);
+    if (availability?.closed) {
+      setLoading(false);
+      setError('Pendaftaran untuk acara ini telah berakhir.');
+      return;
+    }
     if (!emailVerified) {
       setLoading(false);
       setError('Harap verifikasi email terlebih dahulu sebelum mengirim pendaftaran.');
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/api/public/intimate/register`, {
+      const res = await fetch(`${apiBase}/api/public/intimate/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -134,12 +160,15 @@ export default function IntimateRegisterPage() {
       setEmailVerifyMsg(null);
       // Refresh availability
       try {
-        const resA = await fetch(`${API_BASE}/api/public/intimate/register/availability`);
+        const resA = await fetch(`${apiBase}/api/public/intimate/register/availability`);
         const dataA = await resA.json();
         if (resA.ok) setAvailability(dataA);
       } catch {}
     } catch (err: any) {
-      setError(err.message || 'Terjadi kesalahan');
+      const msg = err?.message === 'Failed to fetch'
+        ? `Tidak dapat menghubungi server. Pastikan API tersedia di ${apiBase}/api dan koneksi internet stabil.`
+        : (err?.message || 'Terjadi kesalahan');
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -167,6 +196,9 @@ export default function IntimateRegisterPage() {
                 <span className="inline-flex items-center px-3 py-1 text-sm rounded-full bg-white/10 border border-white/20">
                   Sisa: <span className="ml-1 font-semibold">{availability.remaining}</span>
                 </span>
+                <span className={`inline-flex items-center px-3 py-1 text-sm rounded-full border ${availability.closed ? 'bg-red-500/20 border-red-300 text-red-100' : 'bg-green-500/20 border-green-300 text-green-100'}`}>
+                  Status: <span className="ml-1 font-semibold">{availability.closed ? 'Pendaftaran ditutup — Event selesai' : 'Pendaftaran dibuka'}</span>
+                </span>
               </div>
             )}
           </div>
@@ -175,6 +207,19 @@ export default function IntimateRegisterPage() {
 
       {/* Form Card */}
       <div className="bg-white rounded-2xl shadow-xl p-6">
+        {(availability?.closed) && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            <div className="flex">
+              <svg className="h-5 w-5 text-red-400 mr-3 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              <div>
+                <div className="font-medium">Pendaftaran Ditutup</div>
+                <div>Event sudah berakhir. Formulir pendaftaran dinonaktifkan.</div>
+              </div>
+            </div>
+          </div>
+        )}
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
             <div className="flex">
@@ -224,6 +269,7 @@ export default function IntimateRegisterPage() {
               value={form.name}
               onChange={handleChange}
               required
+              disabled={Boolean(availability?.closed)}
               placeholder="Masukkan nama lengkap"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:border-transparent"
             />
@@ -237,6 +283,7 @@ export default function IntimateRegisterPage() {
               value={form.email}
               onChange={handleChange}
               required
+              disabled={Boolean(availability?.closed)}
               placeholder="nama@contoh.com"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:border-transparent"
             />
@@ -245,7 +292,7 @@ export default function IntimateRegisterPage() {
                 <button
                   type="button"
                   onClick={sendEmailVerification}
-                  disabled={emailVerifySending || !form.email}
+                  disabled={emailVerifySending || !form.email || Boolean(availability?.closed)}
                   className="px-3 py-1.5 text-sm rounded-md bg-emerald-700 hover:bg-emerald-800 text-white disabled:opacity-60"
                 >
                   {emailVerifySending ? 'Mengirim…' : 'Kirim Kode Verifikasi'}
@@ -266,12 +313,13 @@ export default function IntimateRegisterPage() {
                   value={emailVerificationCode}
                   onChange={(e) => setEmailVerificationCode(e.target.value.replace(/[^0-9]/g, ''))}
                   placeholder="Masukkan 6 digit kode"
+                  disabled={Boolean(availability?.closed)}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:border-transparent"
                 />
                 <button
                   type="button"
                   onClick={verifyEmailCode}
-                  disabled={emailVerifyChecking || emailVerificationCode.length !== 6}
+                  disabled={emailVerifyChecking || emailVerificationCode.length !== 6 || Boolean(availability?.closed)}
                   className="px-3 py-2 text-sm rounded-md bg-emerald-700 hover:bg-emerald-800 text-white disabled:opacity-60"
                 >
                   {emailVerifyChecking ? 'Memverifikasi…' : 'Verifikasi'}
@@ -291,6 +339,7 @@ export default function IntimateRegisterPage() {
               value={form.phone}
               onChange={handleChange}
               required
+              disabled={Boolean(availability?.closed)}
               placeholder="08xxxxxxxxxx"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:border-transparent"
             />
@@ -304,6 +353,7 @@ export default function IntimateRegisterPage() {
               onChange={handleChange}
               rows={3}
               placeholder="Alamat lengkap (jalan, RT/RW, kelurahan/kecamatan, kota)"
+              disabled={Boolean(availability?.closed)}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:border-transparent"
             />
           </div>
@@ -318,16 +368,17 @@ export default function IntimateRegisterPage() {
               onChange={handleChange}
               rows={3}
               placeholder="Catatan tambahan (opsional)"
+              disabled={Boolean(availability?.closed)}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:border-transparent"
             />
           </div>
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || Boolean(availability?.closed)}
             className="w-full bg-emerald-700 hover:bg-emerald-800 text-white py-3 px-4 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:opacity-60"
           >
-            {loading ? 'Mengirim...' : 'Kirim Pre-Registrasi'}
+            {availability?.closed ? 'Pendaftaran Ditutup' : (loading ? 'Mengirim...' : 'Kirim Pre-Registrasi')}
           </button>
         </form>
 
