@@ -382,20 +382,20 @@ jobs:
           if [ -n "$SLACK_WEBHOOK_URL" ]; then
             echo "Sending Slack success notification"
             payload=$(cat <<'JSON'
-{
-  "text": "✅ Deployment successful",
-  "blocks": [
-    {"type": "section", "text": {"type": "mrkdwn", "text": "*Deployment Status*: ✅ Successful"}},
-    {"type": "section", "fields": [
-      {"type": "mrkdwn", "text": "*Commit*\n${{ github.sha }}"},
-      {"type": "mrkdwn", "text": "*Branch*\n${{ github.ref_name }}"},
-      {"type": "mrkdwn", "text": "*Frontend*\n${{ secrets.FRONTEND_URL }}"}
-    ]},
-    {"type": "context", "elements": [{"type": "mrkdwn", "text": "Deployed at $(date)"}]}
-  ]
-}
-JSON
-)
+            {
+              "text": "✅ Deployment successful",
+              "blocks": [
+                {"type": "section", "text": {"type": "mrkdwn", "text": "*Deployment Status*: ✅ Successful"}},
+                {"type": "section", "fields": [
+                  {"type": "mrkdwn", "text": "*Commit*\n${{ github.sha }}"},
+                  {"type": "mrkdwn", "text": "*Branch*\n${{ github.ref_name }}"},
+                  {"type": "mrkdwn", "text": "*Frontend*\n${{ secrets.FRONTEND_URL }}"}
+                ]},
+                {"type": "context", "elements": [{"type": "mrkdwn", "text": "Deployed at $(date)"}]}
+              ]
+            }
+            JSON
+            )
             curl -fsS -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL" || echo "Slack notify failed"
           else
             echo "SLACK_WEBHOOK_URL not set; skipping Slack notification"
@@ -412,20 +412,20 @@ JSON
           if [ -n "$SLACK_WEBHOOK_URL" ]; then
             echo "Sending Slack failure notification"
             payload=$(cat <<'JSON'
-{
-  "text": "❌ Deployment failed",
-  "blocks": [
-    {"type": "section", "text": {"type": "mrkdwn", "text": "*Deployment Status*: ❌ Failed"}},
-    {"type": "section", "fields": [
-      {"type": "mrkdwn", "text": "*Commit*\n${{ github.sha }}"},
-      {"type": "mrkdwn", "text": "*Branch*\n${{ github.ref_name }}"},
-      {"type": "mrkdwn", "text": "*Frontend*\n${{ secrets.FRONTEND_URL }}"}
-    ]},
-    {"type": "context", "elements": [{"type": "mrkdwn", "text": "Failed at $(date)"}]}
-  ]
-}
-JSON
-)
+            {
+              "text": "❌ Deployment failed",
+              "blocks": [
+                {"type": "section", "text": {"type": "mrkdwn", "text": "*Deployment Status*: ❌ Failed"}},
+                {"type": "section", "fields": [
+                  {"type": "mrkdwn", "text": "*Commit*\n${{ github.sha }}"},
+                  {"type": "mrkdwn", "text": "*Branch*\n${{ github.ref_name }}"},
+                  {"type": "mrkdwn", "text": "*Frontend*\n${{ secrets.FRONTEND_URL }}"}
+                ]},
+                {"type": "context", "elements": [{"type": "mrkdwn", "text": "Failed at $(date)"}]}
+              ]
+            }
+            JSON
+            )
             curl -fsS -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL" || echo "Slack notify failed"
           else
             echo "SLACK_WEBHOOK_URL not set; skipping Slack notification"
