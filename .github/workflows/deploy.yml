@@ -273,6 +273,20 @@ jobs:
             ls -dt lodge-family-* | tail -n +4 | xargs sudo rm -rf || true
             EOF
 
+      - name: Setup Certbot Auto-Renew on VPS
+        if: ${{ secrets.VPS_HOST != '' && secrets.VPS_USER != '' && secrets.VPS_SSH_KEY != '' && secrets.DATABASE_URL != '' }}
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            set -e
+            SCRIPT_PATH="/var/www/lodge-family-current/scripts/setup-certbot-renew.sh"
+            if [ -f "$SCRIPT_PATH" ]; then
+              echo "Running Certbot auto-renew setup script..."
+              sudo bash "$SCRIPT_PATH"
+            else
+              echo "Certbot setup script not found at $SCRIPT_PATH; skipping."
+            fi
+          EOF
+
       - name: Health Check
         if: ${{ secrets.VPS_HOST != '' && secrets.VPS_USER != '' && secrets.VPS_SSH_KEY != '' && secrets.DATABASE_URL != '' }}
         run: |
