@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { PrismaClient, RedemptionStatus, RegistrationStatus, TicketStatus, PromoType } from '@prisma/client';
+import { PrismaClient, RedemptionStatus, RegistrationStatus, TicketStatus, PromoType, Prisma } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { verifyPayload, verifyFriendlyVoucherCode, signPayloadWithFriendlyCode } from '../utils/security';
@@ -534,7 +534,7 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
 
       if (publicReg) {
         // Cegah double redeem dengan melihat riwayat untuk voucher ini
-        const already = await prisma.redeemHistory.findFirst({ where: { voucherType: 'EVENT' as any, voucherId: publicReg.id } });
+        const already = await prisma.redeemHistory.findFirst({ where: { voucherType: 'EVENT' as any, voucherId: String(publicReg.id) } });
         if (already) {
           return res.status(400).json({ message: 'Voucher pra-registrasi sudah pernah di-redeem' });
         }
@@ -542,7 +542,7 @@ router.post('/redeem-by-code', adminAuth, async (req, res) => {
         memberId = '';
         memberName = publicReg.name || '';
         voucherType = 'EVENT' as any;
-        voucherId = publicReg.id;
+        voucherId = String(publicReg.id);
         voucherLabel = publicReg.eventName;
 
         // Generate proof
@@ -2084,12 +2084,12 @@ router.post('/redeem', adminAuth, async (req, res) => {
       const pr = await prisma.publicRegistration.findUnique({ where: { id: payload.registrationId } });
       if (!pr) return res.status(404).json({ message: 'Public registration not found' });
       // Prevent double redeem by checking existing history for same voucher
-      const already = await prisma.redeemHistory.findFirst({ where: { voucherType: 'EVENT' as any, voucherId: pr.id } });
+      const already = await prisma.redeemHistory.findFirst({ where: { voucherType: 'EVENT' as any, voucherId: String(pr.id) } });
       if (already) return res.status(400).json({ message: 'Already redeemed' });
       memberId = '';
       memberName = pr.name || '';
       voucherType = 'EVENT' as any;
-      voucherId = pr.id;
+      voucherId = String(pr.id);
       voucherLabel = payload.eventName || 'Pra-Registrasi Publik';
       const baseUrl = (process.env.APP_URL && process.env.APP_URL.trim()) ? process.env.APP_URL : `${req.protocol}://${req.get('host')}`;
       const qrUrl = data && hash ? `${baseUrl}/api/verify?data=${encodeURIComponent(data)}&hash=${hash}` : `${baseUrl}/api/verify?friendlyCode=${payload.friendlyCode || pr.id}`;
@@ -2114,8 +2114,8 @@ router.post('/redeem', adminAuth, async (req, res) => {
 router.get('/redeem-history', adminAuth, async (req, res) => {
   try {
     const { type, from, to, member } = req.query as { type?: string; from?: string; to?: string; member?: string };
-    const where: any = {};
-    if (type && ['TICKET', 'POINTS', 'EVENT', 'TOURISM_TICKET', 'BENEFIT'].includes(type)) where.voucherType = type;
+    const where: Prisma.RedeemHistoryWhereInput = {};
+    if (type && ['TICKET', 'POINTS', 'EVENT', 'TOURISM_TICKET', 'BENEFIT'].includes(type)) where.voucherType = type as any;
     if (from || to) {
       where.redeemedAt = {};
       if (from) where.redeemedAt.gte = new Date(from);
@@ -2611,15 +2611,15 @@ router.post('/redeem', adminAuth, async (req, res) => {
 router.get('/redeem-history', adminAuth, async (req, res) => {
   try {
     const { type, from, to, member } = req.query as { type?: string; from?: string; to?: string; member?: string };
-    const where: any = {};
-    if (type && ['TICKET', 'POINTS', 'EVENT', 'TOURISM_TICKET', 'BENEFIT'].includes(type)) where.voucherType = type;
+    const where: Prisma.RedeemHistoryWhereInput = {};
+    if (type && ['TICKET', 'POINTS', 'EVENT', 'TOURISM_TICKET', 'BENEFIT'].includes(type)) where.voucherType = type as any;
     if (from || to) {
       where.redeemedAt = {};
       if (from) where.redeemedAt.gte = new Date(from);
       if (to) where.redeemedAt.lte = new Date(to);
     }
     if (member && member.trim()) {
-      where.memberName = { contains: member.trim(), mode: 'insensitive' };
+      where.memberName = { contains: member.trim() } as any;
     }
     const list = await prisma.redeemHistory.findMany({ where, orderBy: { redeemedAt: 'desc' }, take: 200 });
     res.json(list);
