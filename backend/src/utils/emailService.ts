@@ -26,12 +26,29 @@ interface BookingEmailData {
   friendlyCode?: string;
 }
 
-// Konfigurasi transporter email
-const createTransporter = () => {
+// Konfigurasi transporter email dengan fallback Ethereal untuk pengujian/dev
+const createTransporter = async () => {
+  // Fallback to Ethereal whenever SMTP is not configured, regardless of NODE_ENV,
+  // so production can still exercise email flows without real SMTP.
+  const useEthereal = String(process.env.USE_ETHEREAL || '').toLowerCase() === 'true'
+    || !process.env.SMTP_HOST;
+
+  if (useEthereal) {
+    const testAccount = await nodemailer.createTestAccount();
+    return nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
+      auth: { user: testAccount.user, pass: testAccount.pass },
+    });
+  }
+
+  const port = parseInt(process.env.SMTP_PORT || '465');
+  const secure = process.env.SMTP_SECURE === 'true' || port === 465;
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '465'),
-    secure: process.env.SMTP_SECURE === 'true',
+    port,
+    secure,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
@@ -300,7 +317,7 @@ const generateEVoucherHTML = (booking: BookingEmailData): string => {
 // Fungsi untuk mengirim e-voucher email
 export const sendEVoucherEmail = async (booking: BookingEmailData): Promise<boolean> => {
   try {
-    const transporter = createTransporter();
+    const transporter = await createTransporter();
     
     const mailOptions = {
       from: {
@@ -324,7 +341,7 @@ export const sendEVoucherEmail = async (booking: BookingEmailData): Promise<bool
 // Fungsi untuk mengirim email konfirmasi booking (sebelum pembayaran)
 export const sendBookingConfirmationEmail = async (booking: BookingEmailData): Promise<boolean> => {
   try {
-    const transporter = createTransporter();
+    const transporter = await createTransporter();
     
     const mailOptions = {
       from: {
