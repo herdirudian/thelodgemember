@@ -1,0 +1,340 @@
+name: Deploy via PM2 (SSH)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+        - production
+        - staging
+      vps_host:
+        description: 'VPS host/IP (optional, overrides secret)'
+        required: false
+        type: string
+      vps_user:
+        description: 'VPS SSH username (optional, overrides secret)'
+        required: false
+        type: string
+      vps_password:
+        description: 'VPS SSH password (optional; enables password-based deploy)'
+        required: false
+        type: string
+      remote_dir:
+        description: 'Remote base dir (e.g. /var/www/thelodgefamily)'
+        required: false
+        type: string
+      next_public_api_url:
+        description: 'Frontend NEXT_PUBLIC_API_URL (optional)'
+        required: false
+        type: string
+      pm2_ecosystem_path:
+        description: 'PM2 ecosystem path (optional)'
+        required: false
+        type: string
+      database_url:
+        description: 'Backend DATABASE_URL (optional)'
+        required: false
+        type: string
+      jwt_secret:
+        description: 'Backend JWT_SECRET (optional)'
+        required: false
+        type: string
+      frontend_url:
+        description: 'Backend FRONTEND_URL (optional)'
+        required: false
+        type: string
+      admin_email:
+        description: 'Initial ADMIN_EMAIL (optional)'
+        required: false
+        type: string
+      admin_password:
+        description: 'Initial ADMIN_PASSWORD (optional)'
+        required: false
+        type: string
+
+jobs:
+  build-artifacts:
+    name: Build Artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Build backend
+        run: npm run build
+        working-directory: backend
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Set NEXT_PUBLIC_API_URL (fallback to production domain)
+        run: |
+          if [ -n "${{ inputs.next_public_api_url }}" ]; then
+            echo "NEXT_PUBLIC_API_URL=${{ inputs.next_public_api_url }}" >> $GITHUB_ENV
+          elif [ -n "${{ secrets.NEXT_PUBLIC_API_URL }}" ]; then
+            echo "NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}" >> $GITHUB_ENV
+          else
+            echo "NEXT_PUBLIC_API_URL=https://family.thelodgegroup.id" >> $GITHUB_ENV
+          fi
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: ${{ env.NEXT_PUBLIC_API_URL }}
+
+      - name: Prepare release package
+        run: |
+          set -e
+          RELEASE_DIR=release
+          mkdir -p "$RELEASE_DIR/backend" "$RELEASE_DIR/frontend"
+
+          # Backend runtime files
+          cp -r backend/dist "$RELEASE_DIR/backend/dist"
+          cp -r backend/prisma "$RELEASE_DIR/backend/prisma"
+          cp backend/package.json "$RELEASE_DIR/backend/package.json"
+          cp backend/package-lock.json "$RELEASE_DIR/backend/package-lock.json" || true
+
+          # Frontend runtime files
+          cp -r frontend/.next "$RELEASE_DIR/frontend/.next"
+          cp -r frontend/public "$RELEASE_DIR/frontend/public" || true
+          cp frontend/package.json "$RELEASE_DIR/frontend/package.json"
+          cp frontend/package-lock.json "$RELEASE_DIR/frontend/package-lock.json" || true
+          cp frontend/next.config.ts "$RELEASE_DIR/frontend/next.config.ts" || true
+
+          # Root configs
+          cp ecosystem.config.js "$RELEASE_DIR/ecosystem.config.js" || true
+
+          # Metadata
+          echo "COMMIT_SHA=${{ github.sha }}" > "$RELEASE_DIR/DEPLOYMENT_META"
+          echo "REF=${{ github.ref_name }}" >> "$RELEASE_DIR/DEPLOYMENT_META"
+          echo "DATE=$(date -Iseconds)" >> "$RELEASE_DIR/DEPLOYMENT_META"
+
+          # Create tarball
+          tar -czf release.tar.gz "$RELEASE_DIR"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pm2-release
+          path: |
+            release.tar.gz
+          retention-days: 7
+
+  deploy:
+    name: Deploy to VPS via SSH + PM2
+    needs: build-artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve deploy parameters from inputs/secrets
+        run: |
+          # Resolve connection
+          [ -n "${{ inputs.vps_host }}" ] && echo "DEP_HOST=${{ inputs.vps_host }}" >> $GITHUB_ENV || echo "DEP_HOST=${{ secrets.VPS_HOST }}" >> $GITHUB_ENV
+          [ -n "${{ inputs.vps_user }}" ] && echo "DEP_USER=${{ inputs.vps_user }}" >> $GITHUB_ENV || echo "DEP_USER=${{ secrets.VPS_USER }}" >> $GITHUB_ENV
+          [ -n "${{ inputs.vps_password }}" ] && echo "DEP_PASSWORD=${{ inputs.vps_password }}" >> $GITHUB_ENV || echo "DEP_PASSWORD=${{ secrets.VPS_PASSWORD }}" >> $GITHUB_ENV
+
+          # Resolve paths
+          [ -n "${{ inputs.remote_dir }}" ] && echo "DEP_REMOTE_DIR=${{ inputs.remote_dir }}" >> $GITHUB_ENV || echo "DEP_REMOTE_DIR=${{ secrets.REMOTE_DIR }}" >> $GITHUB_ENV
+          [ -n "${{ inputs.pm2_ecosystem_path }}" ] && echo "DEP_PM2_ECOSYSTEM_PATH=${{ inputs.pm2_ecosystem_path }}" >> $GITHUB_ENV || echo "DEP_PM2_ECOSYSTEM_PATH=${{ secrets.PM2_ECOSYSTEM_PATH }}" >> $GITHUB_ENV
+
+          # Resolve backend runtime env
+          [ -n "${{ inputs.database_url }}" ] && echo "DEP_DATABASE_URL=${{ inputs.database_url }}" >> $GITHUB_ENV || echo "DEP_DATABASE_URL=${{ secrets.DATABASE_URL }}" >> $GITHUB_ENV
+          [ -n "${{ inputs.jwt_secret }}" ] && echo "DEP_JWT_SECRET=${{ inputs.jwt_secret }}" >> $GITHUB_ENV || echo "DEP_JWT_SECRET=${{ secrets.JWT_SECRET }}" >> $GITHUB_ENV
+          [ -n "${{ inputs.frontend_url }}" ] && echo "DEP_FRONTEND_URL=${{ inputs.frontend_url }}" >> $GITHUB_ENV || echo "DEP_FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> $GITHUB_ENV
+          [ -n "${{ inputs.admin_email }}" ] && echo "DEP_ADMIN_EMAIL=${{ inputs.admin_email }}" >> $GITHUB_ENV || echo "DEP_ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL }}" >> $GITHUB_ENV
+          [ -n "${{ inputs.admin_password }}" ] && echo "DEP_ADMIN_PASSWORD=${{ inputs.admin_password }}" >> $GITHUB_ENV || echo "DEP_ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}" >> $GITHUB_ENV
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pm2-release
+          path: .
+
+      # Preferred: SSH key-based deployment
+      - name: Setup SSH agent (key-based)
+        if: ${{ secrets.VPS_SSH_KEY != '' }}
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Add VPS to known hosts (key-based)
+        if: ${{ secrets.VPS_SSH_KEY != '' }}
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ env.DEP_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Upload tarball to VPS (key-based)
+        if: ${{ secrets.VPS_SSH_KEY != '' }}
+        run: |
+          RELEASE_ID="${{ github.run_id }}-${{ github.sha }}"
+          REMOTE_DIR="${{ env.DEP_REMOTE_DIR }}"
+          if [ -z "$REMOTE_DIR" ]; then
+            echo "REMOTE_DIR secret is required (e.g., /var/www/thelodgefamily)" && exit 1
+          fi
+          ssh ${{ env.DEP_USER }}@${{ env.DEP_HOST }} "mkdir -p $REMOTE_DIR/releases/$RELEASE_ID"
+          scp release.tar.gz ${{ env.DEP_USER }}@${{ env.DEP_HOST }}:$REMOTE_DIR/releases/$RELEASE_ID/
+
+      - name: Deploy and reload PM2 (key-based)
+        if: ${{ secrets.VPS_SSH_KEY != '' }}
+        run: |
+          set -e
+          RELEASE_ID="${{ github.run_id }}-${{ github.sha }}"
+          REMOTE_DIR="${{ env.DEP_REMOTE_DIR }}"
+          PM2_ECOSYSTEM_PATH="${{ env.DEP_PM2_ECOSYSTEM_PATH }}"
+          [ -z "$PM2_ECOSYSTEM_PATH" ] && PM2_ECOSYSTEM_PATH="$REMOTE_DIR/releases/$RELEASE_ID/release/ecosystem.config.js"
+
+          ssh ${{ env.DEP_USER }}@${{ env.DEP_HOST }} << EOF
+            set -e
+            cd $REMOTE_DIR/releases/$RELEASE_ID
+            tar -xzf release.tar.gz
+
+            # Install runtime deps (no dev) for backend & frontend
+            if [ -d release/backend ]; then
+              cd release/backend
+              npm ci --omit=dev || npm install --production
+              cd ../../
+            fi
+            if [ -d release/frontend ]; then
+              cd release/frontend
+              npm ci --omit=dev || npm install --production
+              cd ../../
+            fi
+
+            # Write backend .env inside the release directory (read by dotenv)
+            RELEASE_ENV="$REMOTE_DIR/releases/$RELEASE_ID/release/.env"
+            bash -lc "cat > $RELEASE_ENV" << 'ENVFILE'
+NODE_ENV=production
+PORT=5001
+DATABASE_URL=${{ env.DEP_DATABASE_URL }}
+JWT_SECRET=${{ env.DEP_JWT_SECRET }}
+FRONTEND_URL=${{ env.DEP_FRONTEND_URL }}
+ADMIN_EMAIL=${{ env.DEP_ADMIN_EMAIL }}
+ADMIN_PASSWORD=${{ env.DEP_ADMIN_PASSWORD }}
+ENVFILE
+            chmod 640 $RELEASE_ENV || true
+
+            # Update current symlink to point to the prepared release
+            ln -snf $REMOTE_DIR/releases/$RELEASE_ID/release $REMOTE_DIR/current
+ 
+            # Ensure Node.js and PM2 are installed
+            if ! command -v node >/dev/null 2>&1; then
+              curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+              apt-get install -y nodejs
+            fi
+            if ! command -v pm2 >/dev/null 2>&1; then
+              npm install -g pm2
+            fi
+
+            # PM2 reload using ecosystem
+            pm2 startOrReload $PM2_ECOSYSTEM_PATH --env production || pm2 reload $PM2_ECOSYSTEM_PATH --env production
+            pm2 save || true
+
+            # Keep last 5 releases
+            cd $REMOTE_DIR/releases
+            ls -dt */ | tail -n +6 | xargs -r rm -rf || true
+          EOF
+
+      # Fallback: password-based deployment using appleboy actions
+      - name: Upload tarball to VPS (password-based)
+        if: ${{ inputs.vps_password != '' || secrets.VPS_PASSWORD != '' }}
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.DEP_HOST }}
+          username: ${{ env.DEP_USER }}
+          password: ${{ env.DEP_PASSWORD }}
+          source: release.tar.gz
+          target: ${{ env.DEP_REMOTE_DIR }}/releases/${{ github.run_id }}-${{ github.sha }}/
+
+      - name: Deploy and reload PM2 (password-based)
+        if: ${{ inputs.vps_password != '' || secrets.VPS_PASSWORD != '' }}
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ env.DEP_HOST }}
+          username: ${{ env.DEP_USER }}
+          password: ${{ env.DEP_PASSWORD }}
+          script: |
+            set -e
+            RELEASE_ID="${{ github.run_id }}-${{ github.sha }}"
+            REMOTE_DIR="${{ env.DEP_REMOTE_DIR }}"
+            PM2_ECOSYSTEM_PATH="${{ env.DEP_PM2_ECOSYSTEM_PATH }}"
+            [ -z "$PM2_ECOSYSTEM_PATH" ] && PM2_ECOSYSTEM_PATH="$REMOTE_DIR/releases/$RELEASE_ID/release/ecosystem.config.js"
+
+            cd $REMOTE_DIR/releases/$RELEASE_ID
+            tar -xzf release.tar.gz
+
+            if [ -d release/backend ]; then
+              cd release/backend
+              npm ci --omit=dev || npm install --production
+              cd ../../
+            fi
+            if [ -d release/frontend ]; then
+              cd release/frontend
+              npm ci --omit=dev || npm install --production
+              cd ../../
+            fi
+
+            RELEASE_ENV="$REMOTE_DIR/releases/$RELEASE_ID/release/.env"
+            cat > $RELEASE_ENV << 'ENVFILE'
+NODE_ENV=production
+PORT=5001
+DATABASE_URL=${{ env.DEP_DATABASE_URL }}
+JWT_SECRET=${{ env.DEP_JWT_SECRET }}
+FRONTEND_URL=${{ env.DEP_FRONTEND_URL }}
+ADMIN_EMAIL=${{ env.DEP_ADMIN_EMAIL }}
+ADMIN_PASSWORD=${{ env.DEP_ADMIN_PASSWORD }}
+ENVFILE
+            chmod 640 $RELEASE_ENV || true
+
+            ln -snf $REMOTE_DIR/releases/$RELEASE_ID/release $REMOTE_DIR/current
+ 
+            # Ensure Node.js and PM2 are installed
+            if ! command -v node >/dev/null 2>&1; then
+              curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+              apt-get install -y nodejs
+            fi
+            if ! command -v pm2 >/dev/null 2>&1; then
+              npm install -g pm2
+            fi
+
+            pm2 startOrReload $PM2_ECOSYSTEM_PATH --env production || pm2 reload $PM2_ECOSYSTEM_PATH --env production
+            pm2 save || true
+
+            cd $REMOTE_DIR/releases
+            ls -dt */ | tail -n +6 | xargs -r rm -rf || true
+
+      - name: Health checks
+        run: |
+          # Wait a bit for services
+          sleep 10
+          # Check backend health via domain
+          curl -fsS https://family.thelodgegroup.id/api/health || exit 1
+          # Check root page (should be HTML, but reachable)
+          curl -I -fsS https://family.thelodgegroup.id/ || exit 1
+
+          # Smoke test: login should return 401 with JSON body (not HTML)
+          curl -s -H 'Content-Type: application/json' -H 'Accept: application/json' \
+            -d '{"email":"admin@thelodgegroup.id","password":"wrongpass"}' \
+            https://family.thelodgegroup.id/api/login -o /tmp/login_body.txt -D /tmp/login_headers.txt || true
+          STATUS=$(head -n1 /tmp/login_headers.txt | awk '{print $2}')
+          if [ "$STATUS" != "401" ]; then
+            echo "Unexpected status for login smoke test: $STATUS" && exit 1
+          fi
+          if ! head -c 1 /tmp/login_body.txt | grep -q '{'; then
+            echo "Login smoke test body is not JSON" && exit 1
+          fi

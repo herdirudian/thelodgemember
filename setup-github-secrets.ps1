@@ -183,3 +183,67 @@ Write-Host "DATABASE_URL: file:./prisma/dev.db" -ForegroundColor Gray
 Write-Host ""
 
 Write-Host "Setup complete! Check the generated key files and follow the steps above." -ForegroundColor Green
+
+# STEP 7: Auto-configure GitHub Secrets (using gh CLI)
+$gh = Get-Command gh -ErrorAction SilentlyContinue
+if (-not $gh) {
+  Write-Host "GitHub CLI (gh) not found. Skipping auto-secret setup." -ForegroundColor Yellow
+  Write-Host "Install from https://cli.github.com/ then re-run this script to auto-set secrets." -ForegroundColor DarkYellow
+} else {
+  $doSet = Read-Host "Do you want to set repository secrets now? (y/n)"
+  if ($doSet -eq 'y') {
+    Write-Host "Configuring base secrets..." -ForegroundColor Green
+    gh auth status | Out-Null
+    $repo = Read-Host "Enter owner/repo (leave blank to use current repo)"
+    if ($repo) { gh repo view $repo | Out-Null } else { $repo = '' }
+
+    $REMOTE_DIR = Read-Host "REMOTE_DIR (default: /var/www/thelodgefamily)"
+    if (-not $REMOTE_DIR -or $REMOTE_DIR.Trim() -eq '') { $REMOTE_DIR = "/var/www/thelodgefamily" }
+    $NEXT_PUBLIC_API_URL = Read-Host "NEXT_PUBLIC_API_URL (default: https://$DOMAIN)"
+    if (-not $NEXT_PUBLIC_API_URL -or $NEXT_PUBLIC_API_URL.Trim() -eq '') { $NEXT_PUBLIC_API_URL = "https://$DOMAIN" }
+    $PM2_ECOSYSTEM_PATH = Read-Host "PM2_ECOSYSTEM_PATH (optional, e.g. $REMOTE_DIR/current/ecosystem.config.js)"
+
+    $defaultKeyPath = "$PWD/github-actions-private-key.txt"
+    if (Test-Path $defaultKeyPath) {
+      $sshKeyContent = Get-Content -Raw $defaultKeyPath
+    } else {
+      $keyInputPath = Read-Host "Path to private SSH key for VPS (PEM)"
+      if (Test-Path $keyInputPath) { $sshKeyContent = Get-Content -Raw $keyInputPath } else { $sshKeyContent = "" }
+    }
+
+    $dbUrlDefault = "file:/var/www/thelodgefamily/current/backend/prisma/dev.db"
+    $DATABASE_URL = Read-Host "DATABASE_URL (default: $dbUrlDefault)"
+    if (-not $DATABASE_URL -or $DATABASE_URL.Trim() -eq '') { $DATABASE_URL = $dbUrlDefault }
+    $FRONTEND_URL = Read-Host "FRONTEND_URL (default: https://$DOMAIN)"
+    if (-not $FRONTEND_URL -or $FRONTEND_URL.Trim() -eq '') { $FRONTEND_URL = "https://$DOMAIN" }
+    $ADMIN_EMAIL = Read-Host "ADMIN_EMAIL (optional)"
+    $ADMIN_PASSWORD = Read-Host "ADMIN_PASSWORD (optional)"
+
+    function Set-RepoSecret($name, $value) {
+      if ($null -ne $value -and $value.Trim() -ne '') {
+        if ($repo -ne '') { $env:GH_REPO = $repo }
+        gh secret set $name -b "$value" | Out-Null
+        Write-Host "✓ Secret $name set" -ForegroundColor Green
+      } else {
+        Write-Host "- Skipped $name (no value)" -ForegroundColor Yellow
+      }
+    }
+
+    Set-RepoSecret "VPS_HOST" $VPS_HOST
+    Set-RepoSecret "VPS_USER" $VPS_USER
+    Set-RepoSecret "VPS_SSH_KEY" $sshKeyContent
+    Set-RepoSecret "REMOTE_DIR" $REMOTE_DIR
+    Set-RepoSecret "NEXT_PUBLIC_API_URL" $NEXT_PUBLIC_API_URL
+    Set-RepoSecret "PM2_ECOSYSTEM_PATH" $PM2_ECOSYSTEM_PATH
+    Set-RepoSecret "DATABASE_URL" $DATABASE_URL
+    Set-RepoSecret "JWT_SECRET" $jwtSecret
+    Set-RepoSecret "FRONTEND_URL" $FRONTEND_URL
+    Set-RepoSecret "ADMIN_EMAIL" $ADMIN_EMAIL
+    Set-RepoSecret "ADMIN_PASSWORD" $ADMIN_PASSWORD
+
+    Write-Host "All applicable secrets have been set in the repository." -ForegroundColor Green
+    Write-Host "You can now trigger the workflow from GitHub Actions (Deploy via PM2)." -ForegroundColor Green
+  } else {
+    Write-Host "Auto-secret setup skipped by user choice." -ForegroundColor Yellow
+  }
+}
