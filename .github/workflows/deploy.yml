@@ -136,21 +136,21 @@ jobs:
           ssh-private-key: ${{ env.VPS_SSH_KEY }}
 
       - name: Add VPS to known hosts
-        if: ${{ env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.DATABASE_URL != '' }}
+        if: ${{ success() && env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.DATABASE_URL != '' }}
         run: |
           mkdir -p ~/.ssh
           PORT=${VPS_SSH_PORT:-22}
           ssh-keyscan -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts
 
       - name: Test SSH connectivity
-        if: ${{ env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.DATABASE_URL != '' }}
+        if: ${{ success() && env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.DATABASE_URL != '' }}
         run: |
           PORT=${VPS_SSH_PORT:-22}
           echo "Testing SSH to $VPS_USER@$VPS_HOST:$PORT"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$PORT" "$VPS_USER@$VPS_HOST" "echo ok && uname -a"
 
       - name: Deploy to VPS
-        if: ${{ env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.DATABASE_URL != '' }}
+        if: ${{ success() && env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.DATABASE_URL != '' }}
         run: |
           PORT=${VPS_SSH_PORT:-22}
           # Create deployment directory with timestamp
@@ -293,7 +293,7 @@ jobs:
             EOF
 
       - name: Setup Certbot Auto-Renew on VPS
-        if: ${{ env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.DATABASE_URL != '' }}
+        if: ${{ success() && env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.DATABASE_URL != '' }}
         run: |
           PORT=${VPS_SSH_PORT:-22}
           ssh -p "$PORT" "$VPS_USER@$VPS_HOST" << 'EOF'
@@ -308,7 +308,7 @@ jobs:
           EOF
 
       - name: Health Check
-        if: ${{ env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.DATABASE_URL != '' }}
+        if: ${{ success() && env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.DATABASE_URL != '' }}
         run: |
           # Initial wait for services to start
           sleep 20
@@ -381,7 +381,7 @@ jobs:
           fi
 
       - name: Rollback on failure
-        if: failure()
+        if: ${{ failure() && env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' }}
         run: |
           PORT=${VPS_SSH_PORT:-22}
           ssh -p "$PORT" "$VPS_USER@$VPS_HOST" << 'EOF'
