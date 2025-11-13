@@ -120,16 +120,19 @@ jobs:
           path: deployment-package/
 
       - name: Setup SSH
+        if: ${{ secrets.VPS_HOST != '' && secrets.VPS_USER != '' && secrets.VPS_SSH_KEY != '' && secrets.DATABASE_URL != '' }}
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
 
       - name: Add VPS to known hosts
+        if: ${{ secrets.VPS_HOST != '' && secrets.VPS_USER != '' && secrets.VPS_SSH_KEY != '' && secrets.DATABASE_URL != '' }}
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy to VPS
+        if: ${{ secrets.VPS_HOST != '' && secrets.VPS_USER != '' && secrets.VPS_SSH_KEY != '' && secrets.DATABASE_URL != '' }}
         run: |
           # Create deployment directory with timestamp
           DEPLOY_DIR="/var/www/lodge-family-$(date +%Y%m%d-%H%M%S)"
@@ -271,6 +274,7 @@ jobs:
             EOF
 
       - name: Health Check
+        if: ${{ secrets.VPS_HOST != '' && secrets.VPS_USER != '' && secrets.VPS_SSH_KEY != '' && secrets.DATABASE_URL != '' }}
         run: |
           # Initial wait for services to start
           sleep 20
