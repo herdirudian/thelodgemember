@@ -14,31 +14,31 @@ on:
         - production
         - staging
       vps_host:
-        description: 'VPS host/IP (optional, overrides secret)'
+        description: 31.97.51.129
         required: false
         type: string
       vps_user:
-        description: 'VPS SSH username (optional, overrides secret)'
+        description: root
         required: false
         type: string
       vps_password:
-        description: 'VPS SSH password (optional; enables password-based deploy)'
+        description: BI5mill4h@@@
         required: false
         type: string
       remote_dir:
-        description: 'Remote base dir (e.g. /var/www/thelodgefamily)'
+        description: /var/www/thelodgefamily
         required: false
         type: string
       next_public_api_url:
-        description: 'Frontend NEXT_PUBLIC_API_URL (optional)'
+        description: https://family.thelodgegroup.id
         required: false
         type: string
       pm2_ecosystem_path:
-        description: 'PM2 ecosystem path (optional)'
+        description: /var/www/thelodgefamily/current/ecosystem.config.js
         required: false
         type: string
       database_url:
-        description: 'Backend DATABASE_URL (optional)'
+        description: file:/var/www/thelodgefamily/current/backend/prisma/dev.db
         required: false
         type: string
       jwt_secret:
@@ -46,15 +46,15 @@ on:
         required: false
         type: string
       frontend_url:
-        description: 'Backend FRONTEND_URL (optional)'
+        description: https://family.thelodgegroup.id
         required: false
         type: string
       admin_email:
-        description: 'Initial ADMIN_EMAIL (optional)'
+        description: admin@thelodgegroup.id
         required: false
         type: string
       admin_password:
-        description: 'Initial ADMIN_PASSWORD (optional)'
+        description: admin123
         required: false
         type: string
 
