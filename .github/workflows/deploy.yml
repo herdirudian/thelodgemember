@@ -228,7 +228,7 @@ jobs:
 
             [Install]
             WantedBy=multi-user.target
-UNIT
+            UNIT
 
             sudo tee /etc/systemd/system/lodge-family-frontend.service > /dev/null << 'UNIT'
             [Unit]
@@ -247,7 +247,7 @@ UNIT
 
             [Install]
             WantedBy=multi-user.target
-UNIT
+            UNIT
 
             # Reload and start services
             sudo systemctl daemon-reload
@@ -268,7 +268,7 @@ UNIT
             # Cleanup old deployments (keep last 3)
             cd /var/www
             ls -dt lodge-family-* | tail -n +4 | xargs sudo rm -rf || true
-EOF
+            EOF
 
       - name: Health Check
         run: |
@@ -309,6 +309,38 @@ EOF
             done
           EOF
 
+          # External health check against public URL if provided
+          if [ -n "${{ secrets.FRONTEND_URL }}" ]; then
+            echo "Performing external health checks on ${{ secrets.FRONTEND_URL }}"
+            # Retry public frontend homepage
+            for i in $(seq 1 12); do
+              if curl -fsS "${{ secrets.FRONTEND_URL }}"; then
+                echo "Public frontend healthy"
+                break
+              fi
+              echo "Public frontend not ready yet, retry $i/12..."
+              sleep 10
+              if [ "$i" -eq 12 ]; then
+                echo "Public frontend failed to become healthy in time" && exit 1
+              fi
+            done
+
+            # Retry public backend health endpoint
+            for i in $(seq 1 12); do
+              if curl -fsS "${{ secrets.FRONTEND_URL }}"/api/health; then
+                echo "Public backend health healthy"
+                break
+              fi
+              echo "Public backend health not ready yet, retry $i/12..."
+              sleep 10
+              if [ "$i" -eq 12 ]; then
+                echo "Public backend health failed to become healthy in time" && exit 1
+              fi
+            done
+          else
+            echo "FRONTEND_URL secret not set; skipping external checks"
+          fi
+
       - name: Rollback on failure
         if: failure()
         run: |
@@ -334,6 +366,9 @@ EOF
     needs: [build-and-test, deploy-to-vps]
     runs-on: ubuntu-latest
     if: always()
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
     
     steps:
       - name: Notify Success
@@ -344,6 +379,28 @@ EOF
           echo "Branch: ${{ github.ref_name }}"
           echo "Deployed at: $(date)"
 
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            echo "Sending Slack success notification"
+            payload=$(cat <<'JSON'
+{
+  "text": "✅ Deployment successful",
+  "blocks": [
+    {"type": "section", "text": {"type": "mrkdwn", "text": "*Deployment Status*: ✅ Successful"}},
+    {"type": "section", "fields": [
+      {"type": "mrkdwn", "text": "*Commit*\n${{ github.sha }}"},
+      {"type": "mrkdwn", "text": "*Branch*\n${{ github.ref_name }}"},
+      {"type": "mrkdwn", "text": "*Frontend*\n${{ secrets.FRONTEND_URL }}"}
+    ]},
+    {"type": "context", "elements": [{"type": "mrkdwn", "text": "Deployed at $(date)"}]}
+  ]
+}
+JSON
+)
+            curl -fsS -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL" || echo "Slack notify failed"
+          else
+            echo "SLACK_WEBHOOK_URL not set; skipping Slack notification"
+          fi
+
       - name: Notify Failure
         if: needs.deploy-to-vps.result == 'failure'
         run: |
@@ -351,3 +408,25 @@ EOF
           echo "Commit: ${{ github.sha }}"
           echo "Branch: ${{ github.ref_name }}"
           echo "Failed at: $(date)"
+
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            echo "Sending Slack failure notification"
+            payload=$(cat <<'JSON'
+{
+  "text": "❌ Deployment failed",
+  "blocks": [
+    {"type": "section", "text": {"type": "mrkdwn", "text": "*Deployment Status*: ❌ Failed"}},
+    {"type": "section", "fields": [
+      {"type": "mrkdwn", "text": "*Commit*\n${{ github.sha }}"},
+      {"type": "mrkdwn", "text": "*Branch*\n${{ github.ref_name }}"},
+      {"type": "mrkdwn", "text": "*Frontend*\n${{ secrets.FRONTEND_URL }}"}
+    ]},
+    {"type": "context", "elements": [{"type": "mrkdwn", "text": "Failed at $(date)"}]}
+  ]
+}
+JSON
+)
+            curl -fsS -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL" || echo "Slack notify failed"
+          else
+            echo "SLACK_WEBHOOK_URL not set; skipping Slack notification"
+          fi
